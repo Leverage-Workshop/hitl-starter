@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="56" height="56">
+  <title>Leverage Workshop</title>
+  <path d="M 12 14 L 6 14 L 6 42 L 12 42" fill="none" stroke="#F3F6FC" stroke-width="2.5" stroke-linecap="square"></path>
+  <path d="M 44 14 L 50 14 L 50 42 L 44 42" fill="none" stroke="#F3F6FC" stroke-width="2.5" stroke-linecap="square"></path>
+  <rect x="17" y="26" width="4" height="4" fill="#8A95A6"></rect>
+  <rect x="26" y="26" width="4" height="4" fill="#8A95A6"></rect>
+  <rect x="35" y="26" width="4" height="4" fill="#E0B85A"></rect>
+</svg>

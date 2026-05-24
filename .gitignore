@@ -1,0 +1,6 @@
+# Windows Zone.Identifier alternate data streams
+*:Zone.Identifier
+
+# OS metadata
+.DS_Store
+Thumbs.db

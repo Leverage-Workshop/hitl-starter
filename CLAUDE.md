@@ -4,58 +4,75 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A zero-dependency, no-build human-in-the-loop (HITL) workflow review console. React 18 and Babel run entirely in-browser via CDN — there is no npm, no bundler, no build step, and no node_modules.
+A Next.js 16 (App Router) human-in-the-loop (HITL) workflow review console with TypeScript and Tailwind CSS (utility layer only — Preflight disabled to preserve the existing design system).
 
 ## Running the app
 
-Open `index.html` directly in a browser, or serve the directory with any static file server:
-
 ```bash
-python3 -m http.server 8080
-# then open http://localhost:8080
+npm run dev        # dev server → http://localhost:3000
+npm run build      # production build
+npm run start      # serve the production build
+npx tsc --noEmit   # type check only
 ```
 
-There are no tests, no lint commands, and no CI. The browser console is the development environment.
-
-**Browser console shortcut:** `go('dashboard')`, `go('config')`, `go('settings')` — a tiny imperative nav API wired in `App.jsx` for bypassing the login page during development.
+Vercel deployment: push to `main` and Vercel picks up automatically (project must be linked to the repo in the Vercel dashboard).
 
 ## Architecture
 
-### Script loading order matters
+### File tree
 
-`index.html` loads scripts in strict dependency order — there is no module system:
+```
+app/
+  layout.tsx          ← root layout, imports globals.css
+  globals.css         ← design tokens + component classes + Tailwind utilities
+  page.tsx            ← Login (/)
+  dashboard/page.tsx  ← Dashboard (/dashboard?workflow=<id>)
+  config/page.tsx     ← Config (/config?workflow=<id>)
+  settings/page.tsx   ← Settings (/settings)
+components/
+  ui/
+    Nav.tsx           ← left rail nav
+    Topbar.tsx        ← top bar with breadcrumbs
+    Button.tsx        ← brass / ghost / danger variants
+    StatusCell.tsx
+    PrioCell.tsx
+    Score.tsx
+    BracketMark.tsx   ← bracket logo mark SVG
+  Flyout.tsx          ← DetailFlyout + FlyoutTwoPane
+lib/
+  data.ts             ← THE extension point: CLIENT, WORKFLOWS, ITEMS, ACTION_SET, STATS
+  types.ts            ← TypeScript interfaces
+  format.ts           ← fmtTime, fmtMoney, fmtRelative
+middleware.ts → proxy.ts  ← Next.js 16 auth guard (cookie-based)
+public/
+  logo-horizontal-lockup.svg
+  logo-primary.svg
+```
 
-1. `data.js` — plain JS, sets globals on `window`
-2. `components.jsx` — shared primitives (`Nav`, `Topbar`, `Button`, `StatusCell`, `PrioCell`, `Score`, format utils)
-3. `pages/Flyout.jsx` — `DetailFlyout`, `FlyoutTwoPane`
-4. `pages/Dashboard.jsx` — `Dashboard`
-5. `pages/Login.jsx`, `pages/Config.jsx`, `pages/Settings.jsx`
-6. `App.jsx` — root, mounts to `#root`
+### Routing
 
-Each file ends with `Object.assign(window, { ... })` to export its symbols. Any new file must follow this pattern and be added to `index.html` in the correct position.
+File-system routing via Next.js App Router. `/dashboard?workflow=<id>` — the active workflow is a query param read via `useSearchParams()` inside a Suspense boundary.
 
-### Global state model
+Auth guard: `proxy.ts` redirects unauthenticated requests to `/dashboard`, `/config`, `/settings` back to `/`. Login sets `hitl_authed=true` cookie; sign-out clears it.
 
-`App.jsx` owns `page` (routing) and `workflowId`. `Dashboard` owns `items` (local copy of `ITEMS`), `view` (`table`|`cards`), `selected` (Set of ids), `openId`, and `query`. There is no external state library.
+### The primary extension point: `lib/data.ts`
 
-### The primary extension point: `data.js`
+Forking this starter means editing `lib/data.ts` — nothing else needs to change for a new workflow:
 
-Forking this starter means editing `data.js` — nothing else needs to change for a new workflow:
-
-| Symbol | Purpose |
+| Export | Purpose |
 |---|---|
 | `CLIENT` | White-label identity (name shown in the nav header) |
 | `WORKFLOWS` | Left-nav list with pending counts and status dots |
 | `ACTIVE_WORKFLOW_ID` | Which workflow is selected on load |
-| `ITEMS` | The review queue — shape documented inline in `data.js` |
+| `ITEMS` | The review queue — shape defined in `lib/types.ts` |
 | `ACTION_SET` | Decision buttons rendered in the flyout action bar |
-| `STATS` | Header stat tiles (overridden live by `Dashboard` for pending/approved counts) |
+| `STATS` | Header stat tiles (overridden live by Dashboard for pending/approved counts) |
 
 ### Flyout extension points
 
-`DetailFlyout` in `pages/Flyout.jsx` has two configurable slots called out in comments:
-- **Body slot** (line ~44): defaults to `FlyoutTwoPane` (source vs. AI draft, side-by-side). Replace with a single-pane renderer for workflows without a comparison axis.
-- **Action bar slot** (line ~49): driven entirely by `ACTION_SET` from `data.js`. Swap that array to change decisions.
+`DetailFlyout` in `components/Flyout.tsx` has two configurable slots (marked with comments):
+- **Body slot**: defaults to `FlyoutTwoPane` (source vs. AI draft, side-by-side). Replace with a single-pane renderer for workflows without a comparison axis.
+- **Action bar slot**: driven entirely by `ACTION_SET` from `lib/data.ts`. Swap that array to change decisions.
 
 ### Item data shape
 
@@ -63,12 +80,15 @@ Each `ITEMS` entry carries: `id`, `status` (`pending|approved|rejected|escalated
 
 ## Design system
 
-Styling comes from two CSS files — do not add styles outside them:
-- `assets/colors_and_type.css` — design tokens (CSS variables for color, typography, spacing)
-- `app.css` — layout and component classes
+All styling lives in `app/globals.css`. **Do not add styles outside it.**
 
-Button variants: `brass` (primary action), `ghost` (default), `danger`. Applied via the `Button` primitive.
+Structure:
+1. Design tokens — CSS custom properties (`--bg`, `--fg`, `--c-brass`, etc.)
+2. Component classes — `.btn`, `.nav`, `.topbar`, `.page`, `.flyout`, etc.
+3. `@import "tailwindcss/utilities"` — Tailwind utilities only (no Preflight reset)
+
+Button variants: `brass` (primary action), `ghost` (default), `danger`. Applied via the `Button` primitive in `components/ui/Button.tsx`.
 
 ## Keyboard affordances
 
-Wired in `Dashboard.jsx` — `Escape` closes the flyout; hotkeys from `ACTION_SET[n].hotkey` fire the corresponding action on the open item. Input/textarea elements are excluded from hotkey handling.
+Wired in `app/dashboard/page.tsx` — `Escape` closes the flyout; hotkeys from `ACTION_SET[n].hotkey` fire the corresponding action on the open item. Input/textarea elements are excluded from hotkey handling.

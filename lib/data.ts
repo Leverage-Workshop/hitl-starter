@@ -1,52 +1,25 @@
-/* ============================================================
-   Seed data — rfp-intake review queue.
-
-   This file is THE extension point for forking the starter:
-   - swap WORKFLOWS / ACTIVE_WORKFLOW / ITEMS to model your own queue
-   - swap ACTION_SET to change the decision buttons on the flyout
-   - the rest of the app is generic.
-   ============================================================ */
+import type { ActionItem, ClientIdentity, Stat, Workflow, WorkflowItem } from './types'
 
 // -- client identity ------------------------------------------
-// This console is a per-client, white-label deployment. CLIENT
-// is the company the instance is FOR — change it when you fork.
-// Appears in the top-left of the app header and on the login page.
-const CLIENT = {
-  name:  'Halberd Co',     // human-readable, shown in the header
-  slug:  'halberd-co',     // used wherever a token is needed
-};
+export const CLIENT: ClientIdentity = {
+  name: 'Halberd Co',
+  slug: 'halberd-co',
+}
 
-const WORKFLOWS = [
-  { id: 'rfp-intake',           name: 'rfp-intake',           pending: 12, status: 'running', cadence: '40/wk' },
-  { id: 'invoice-reconciler',   name: 'invoice-reconciler',   pending: 7,  status: 'running', cadence: '220/mo' },
-  { id: 'lead-qualifier',       name: 'lead-qualifier',       pending: 18, status: 'running', cadence: '60/wk' },
-  { id: 'ticket-triage',        name: 'ticket-triage',        pending: 3,  status: 'running', cadence: '180/wk' },
-  { id: 'on-call-summarizer',   name: 'on-call-summarizer',   pending: 0,  status: 'idle',    cadence: '14/wk' },
-  { id: 'weekly-ops-digest',    name: 'weekly-ops-digest',    pending: 0,  status: 'idle',    cadence: '1/wk' },
-  { id: 'churn-signal-watcher', name: 'churn-signal-watcher', pending: 0,  status: 'off',     cadence: '—' },
-  { id: 'pricing-sheet-builder',name: 'pricing-sheet-builder',pending: 2,  status: 'running', cadence: '6/wk' },
-];
+export const WORKFLOWS: Workflow[] = [
+  { id: 'rfp-intake',            name: 'rfp-intake',            pending: 12, status: 'running', cadence: '40/wk' },
+  { id: 'invoice-reconciler',    name: 'invoice-reconciler',    pending: 7,  status: 'running', cadence: '220/mo' },
+  { id: 'lead-qualifier',        name: 'lead-qualifier',        pending: 18, status: 'running', cadence: '60/wk' },
+  { id: 'ticket-triage',         name: 'ticket-triage',         pending: 3,  status: 'running', cadence: '180/wk' },
+  { id: 'on-call-summarizer',    name: 'on-call-summarizer',    pending: 0,  status: 'idle',    cadence: '14/wk' },
+  { id: 'weekly-ops-digest',     name: 'weekly-ops-digest',     pending: 0,  status: 'idle',    cadence: '1/wk' },
+  { id: 'churn-signal-watcher',  name: 'churn-signal-watcher',  pending: 0,  status: 'off',     cadence: '—' },
+  { id: 'pricing-sheet-builder', name: 'pricing-sheet-builder', pending: 2,  status: 'running', cadence: '6/wk' },
+]
 
-const ACTIVE_WORKFLOW_ID = 'rfp-intake';
+export const ACTIVE_WORKFLOW_ID = 'rfp-intake'
 
-// -- review items (one row in table view, one card in cards view)
-//
-// shape:
-//   id           — short identifier, shown in mono
-//   status       — pending | approved | rejected | escalated
-//   priority     — high | normal | flagged   (drives card color stripe)
-//   submitted    — ISO timestamp (formatted at render time)
-//   subject      — short title for the item
-//   from         — counterparty / requester
-//   value        — domain-specific scalar (here: deal size, USD)
-//   score        — model confidence 0–100
-//   attachments  — count
-//   summary      — one-line summary for cards
-//   source       — left pane: the raw input
-//   draft        — right pane: the AI-proposed action (for two-pane review)
-//   notes        — marginalia entries shown beside the body
-//
-const ITEMS = [
+export const ITEMS: WorkflowItem[] = [
   {
     id: 'rfp-2026-0142',
     status: 'pending', priority: 'high',
@@ -309,31 +282,18 @@ Holding June 15–19 for you pending confirmation by Thursday.
       { tag: 'b', ts: '14:09', body: '2 forms flagged: subprocessor list (new vendor added Apr), DPA section 4.2' },
     ],
   },
-];
+]
 
-// -- action set for the flyout decision bar -------------------
-// Swap this when you fork the starter. Each action has:
-//   key      — used internally + as a keyboard hint
-//   label    — what's shown on the button
-//   variant  — 'brass' (primary), 'ghost' (default), 'danger'
-//   hotkey   — single key for keyboard shortcut
-//
-const ACTION_SET = [
-  { key: 'approve', label: 'Approve & send', variant: 'brass',  hotkey: 'A' },
-  { key: 'edit',    label: 'Edit draft',     variant: 'ghost',  hotkey: 'E' },
-  { key: 'reassign',label: 'Reassign',       variant: 'ghost',  hotkey: 'R' },
-  { key: 'reject',  label: 'Reject',         variant: 'danger', hotkey: 'X' },
-];
+export const ACTION_SET: ActionItem[] = [
+  { key: 'approve',  label: 'Approve & send', variant: 'brass',  hotkey: 'A' },
+  { key: 'edit',     label: 'Edit draft',     variant: 'ghost',  hotkey: 'E' },
+  { key: 'reassign', label: 'Reassign',       variant: 'ghost',  hotkey: 'R' },
+  { key: 'reject',   label: 'Reject',         variant: 'danger', hotkey: 'X' },
+]
 
-// -- stat tiles shown on the dashboard header -----------------
-const STATS = [
-  { label: 'PENDING',           value: '12',     sub: 'in queue' },
-  { label: 'APPROVED // 7D',    value: '34',     sub: '+ 6 vs prior 7d' },
-  { label: 'AVG DECISION',      value: '1m 48s', sub: 'open → decide' },
-  { label: 'EST. VALUE // 7D',  value: '$ 412k', sub: 'pipeline reached' },
-];
-
-// expose globally for the Babel scripts that consume this
-Object.assign(window, {
-  CLIENT, WORKFLOWS, ACTIVE_WORKFLOW_ID, ITEMS, ACTION_SET, STATS,
-});
+export const STATS: Stat[] = [
+  { label: 'PENDING',          value: '12',     sub: 'in queue' },
+  { label: 'APPROVED // 7D',   value: '34',     sub: '+ 6 vs prior 7d' },
+  { label: 'AVG DECISION',     value: '1m 48s', sub: 'open → decide' },
+  { label: 'EST. VALUE // 7D', value: '$ 412k', sub: 'pipeline reached' },
+]

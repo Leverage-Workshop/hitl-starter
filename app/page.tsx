@@ -1,17 +1,21 @@
-/* ============================================================
-   Login — minimal, centered. Submitting routes to dashboard.
-   The brass hairline separates the brand mark from the form;
-   it's the brand's CTA-underscore device applied here as a rule.
-   ============================================================ */
+'use client'
 
-const Login = ({ onSignIn }) => {
-  const [email, setEmail] = useState('j.grant@halberd-co.com');
-  const [password, setPassword] = useState('••••••••');
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { CLIENT } from '@/lib/data'
+import { BracketMark } from '@/components/ui/BracketMark'
 
-  const submit = (e) => {
-    e.preventDefault();
-    onSignIn();
-  };
+export default function LoginPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState('j.grant@halberd-co.com')
+  const [password, setPassword] = useState('••••••••')
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    // Set auth cookie and redirect to dashboard
+    document.cookie = 'hitl_authed=true; path=/; max-age=86400; SameSite=Lax'
+    router.push('/dashboard')
+  }
 
   return (
     <div className="login">
@@ -21,7 +25,7 @@ const Login = ({ onSignIn }) => {
           <div className="login__brand-mark">{CLIENT.name} / Console</div>
         </div>
 
-        {/* brass hairline — separates brand from form */}
+        {/* brass hairline */}
         <div className="login__sep"></div>
 
         <div className="login__form">
@@ -63,7 +67,5 @@ const Login = ({ onSignIn }) => {
         <span>us-east-1</span>
       </div>
     </div>
-  );
-};
-
-Object.assign(window, { Login });
+  )
+}

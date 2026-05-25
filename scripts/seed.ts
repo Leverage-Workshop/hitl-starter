@@ -11,7 +11,10 @@
  */
 
 import 'dotenv/config'
+import { eq } from 'drizzle-orm'
 import { auth } from '../lib/auth'
+import { db } from '../db'
+import { user } from '../db/schema'
 
 async function seed() {
   const password = process.env.SEED_ADMIN_PASSWORD
@@ -22,30 +25,35 @@ async function seed() {
   const ADMIN_EMAIL = 'caleb@hitl.local'
   const ADMIN_NAME = 'Caleb'
 
-  // Sign up — will throw if the user already exists; catch and skip
-  const result = await auth.api
-    .signUpEmail({
-      body: {
-        name: ADMIN_NAME,
-        email: ADMIN_EMAIL,
-        password,
-      },
-    })
-    .catch((e: Error) => {
-      if (e.message.toLowerCase().includes('already')) {
-        return null
-      }
-      throw e
-    })
+  // Check if user already exists in the database
+  const existing = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.email, ADMIN_EMAIL))
+    .limit(1)
 
-  if (result) {
-    await auth.api.setRole({
-      body: { userId: result.user.id, role: 'admin' },
-    })
-    console.log(`✅  Seeded admin user: ${ADMIN_EMAIL}`)
-  } else {
+  if (existing.length > 0) {
     console.log(`ℹ️   Admin user already exists — skipped.`)
+    return
   }
+
+  // Sign up via Better Auth (handles password hashing, account creation, etc.)
+  const result = await auth.api.signUpEmail({
+    body: {
+      name: ADMIN_NAME,
+      email: ADMIN_EMAIL,
+      password,
+    },
+  })
+
+  // Promote to admin role directly in the DB — admin API methods require an
+  // authenticated admin session, which can't exist during initial seeding.
+  await db
+    .update(user)
+    .set({ role: 'admin' })
+    .where(eq(user.id, result.user.id))
+
+  console.log(`✅  Seeded admin user: ${ADMIN_EMAIL} (role: admin)`)
 }
 
 seed().catch((err: unknown) => {

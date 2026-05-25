@@ -708,6 +708,8 @@ table.qtable { width: 100%; border-collapse: collapse; font-family: var(--font-s
 .login__forgot { font-family: var(--font-mono); font-size: var(--t-mono-xs); letter-spacing: var(--ls-wide); color: var(--fg-muted); text-transform: uppercase; text-decoration: none; background-image: linear-gradient(var(--fg-accent), var(--fg-accent)); background-repeat: no-repeat; background-position: 0 100%; background-size: 100% 1px; padding-bottom: 1px; }
 .login__forgot:hover { color: var(--fg-accent); background-size: 100% 2px; }
 .login__submit { margin-top: 6px; width: 100%; height: 42px; padding: 0; }
+.login__submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.login__error { font-family: var(--font-mono); font-size: var(--t-mono-xs); letter-spacing: var(--ls-wide); color: #e05252; background: rgba(224,82,82,0.08); border: 1px solid rgba(224,82,82,0.25); border-radius: var(--r-2); padding: 10px 12px; }
 .login__corner { position: fixed; bottom: 14px; left: 18px; font-family: var(--font-mono); font-size: var(--t-mono-xs); letter-spacing: var(--ls-wide); text-transform: uppercase; color: var(--fg-muted); }
 .login__corner .sep { margin: 0 8px; color: var(--rule-strong); }
 .login::before, .login::after { content: ""; position: fixed; top: 0; bottom: 0; width: 1px; background: var(--rule); }

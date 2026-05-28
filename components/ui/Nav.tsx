@@ -3,14 +3,15 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { CLIENT } from '@/lib/data'
-import { ALL_WORKFLOWS } from '@/lib/contract/seed'
 import { BracketMark } from './BracketMark'
+import type { NavWorkflow } from '@/lib/workflows/queries'
 
 interface NavProps {
   workflowId: string
+  workflows: NavWorkflow[]
 }
 
-export function Nav({ workflowId }: NavProps) {
+export function Nav({ workflowId, workflows }: NavProps) {
   const pathname = usePathname()
   const router = useRouter()
   const page = pathname == null ? ''
@@ -42,8 +43,7 @@ export function Nav({ workflowId }: NavProps) {
           <div className="nav__section-label">Workflows</div>
         </div>
         <ul className="nav__list">
-          {ALL_WORKFLOWS.map((wf) => {
-            const pendingCount = wf.stats.find((s) => s.emphasized)?.value ?? 0
+          {workflows.map((wf) => {
             const dotClass =
               'nav__item-dot ' +
               (wf.status === 'idle' || wf.status === 'paused' ? 'nav__item-dot--idle' : '') +
@@ -62,7 +62,7 @@ export function Nav({ workflowId }: NavProps) {
                   {wf.name}
                 </span>
                 <span className="nav__item-count">
-                  {Number(pendingCount) > 0 ? String(pendingCount) : ''}
+                  {wf.pendingCount > 0 ? String(wf.pendingCount) : ''}
                 </span>
               </li>
             )

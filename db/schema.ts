@@ -14,10 +14,13 @@
 
 import {
   boolean,
+  jsonb,
   pgTable,
+  real,
   text,
   timestamp,
 } from 'drizzle-orm/pg-core'
+import type { Action, FieldDef, Note, Source, Stat, Step } from '@/lib/contract'
 
 // ---------------------------------------------------------------------------
 // user
@@ -74,6 +77,48 @@ export const account = pgTable('account', {
   password: text('password'),
   createdAt: timestamp('created_at').notNull(),
   updatedAt: timestamp('updated_at').notNull(),
+})
+
+// ---------------------------------------------------------------------------
+// workflows
+// ---------------------------------------------------------------------------
+export const workflows = pgTable('workflows', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  status: text('status').notNull().default('idle'),
+  defaultView: text('default_view').notNull().default('table'),
+  confidenceFloor: real('confidence_floor'),
+  itemSchema: jsonb('item_schema').$type<FieldDef[]>().notNull(),
+  availableActions: jsonb('available_actions').$type<Action[]>().notNull(),
+  stats: jsonb('stats').$type<Stat[]>().notNull(),
+  steps: jsonb('steps').$type<Step[]>().notNull(),
+  sources: jsonb('sources').$type<Source[]>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
+// workflow_items
+// ---------------------------------------------------------------------------
+export const workflowItems = pgTable('workflow_items', {
+  id: text('id').primaryKey(),
+  workflowId: text('workflow_id')
+    .notNull()
+    .references(() => workflows.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('pending'),
+  priority: text('priority').notNull().default('normal'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  summary: text('summary').notNull(),
+  fields: jsonb('fields').$type<Record<string, unknown>>().notNull(),
+  sourceContent: text('source_content'),
+  proposedOutput: text('proposed_output'),
+  context: jsonb('context').$type<Note[]>().notNull(),
+  /** Nullable per-item action override — inherits workflow availableActions when null. */
+  actions: jsonb('actions').$type<Action[]>(),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  decidedBy: text('decided_by').references(() => user.id, { onDelete: 'set null' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 // ---------------------------------------------------------------------------

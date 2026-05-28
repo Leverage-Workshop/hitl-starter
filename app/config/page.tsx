@@ -2,7 +2,9 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ACTION_SET, ACTIVE_WORKFLOW_ID, WORKFLOWS } from '@/lib/data'
+import { ACTIVE_WORKFLOW_ID } from '@/lib/data'
+import { intentToVariant } from '@/lib/contract'
+import { ALL_WORKFLOWS } from '@/lib/contract/seed'
 import { Button } from '@/components/ui/Button'
 import { Nav } from '@/components/ui/Nav'
 import { Topbar } from '@/components/ui/Topbar'
@@ -19,7 +21,7 @@ function ConfigContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const workflowId = searchParams?.get('workflow') ?? ACTIVE_WORKFLOW_ID
-  const wf = WORKFLOWS.find((w) => w.id === workflowId) ?? WORKFLOWS[0]
+  const wf = ALL_WORKFLOWS.find((w) => w.id === workflowId) ?? ALL_WORKFLOWS[0]
 
   const [name, setName] = useState(wf.name)
   const [schedule, setSchedule] = useState('on-receipt · max 5/min')
@@ -85,7 +87,7 @@ function ConfigContent() {
             <dt>Cadence</dt>
             <dd>
               <input type="text" value={schedule} onChange={(e) => setSchedule(e.target.value)} />
-              <div className="desc" style={{ marginTop: 4 }}>Current load: <span className="mono">{wf.cadence}</span></div>
+              <div className="desc" style={{ marginTop: 4 }}>Status: <span className="mono">{wf.status}</span></div>
             </dd>
 
             <div className="deflist-section">Decision criteria</div>
@@ -149,30 +151,33 @@ function ConfigContent() {
             <dd>
               <div className="desc">These are the buttons shown in the detail flyout for this workflow. Reorder, rename, or remove to fit the decision set this queue needs.</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 480 }}>
-                {ACTION_SET.map((a, i) => (
-                  <div key={a.key} style={{
-                    display: 'grid',
-                    gridTemplateColumns: '20px 1fr 100px 30px',
-                    gap: 8,
-                    alignItems: 'center',
-                    padding: '8px 10px',
-                    border: '1px solid var(--rule)',
-                    borderRadius: 2,
-                    background: 'var(--bg-elevated)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                  }}>
-                    <span style={{ color: 'var(--fg-muted)' }}>{i + 1}</span>
-                    <span>{a.label}</span>
-                    <span style={{
-                      color: a.variant === 'brass' ? 'var(--fg-accent)' : a.variant === 'danger' ? 'var(--c-oxide)' : 'var(--fg-muted)',
-                      textTransform: 'uppercase',
-                      letterSpacing: 'var(--ls-wide)',
-                      fontSize: 10.5,
-                    }}>{a.variant}</span>
-                    <span style={{ color: 'var(--fg-muted)' }}>[{a.hotkey}]</span>
-                  </div>
-                ))}
+                {wf.availableActions.map((a, i) => {
+                  const variant = intentToVariant[a.intent]
+                  return (
+                    <div key={a.id} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '20px 1fr 100px 30px',
+                      gap: 8,
+                      alignItems: 'center',
+                      padding: '8px 10px',
+                      border: '1px solid var(--rule)',
+                      borderRadius: 2,
+                      background: 'var(--bg-elevated)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12,
+                    }}>
+                      <span style={{ color: 'var(--fg-muted)' }}>{i + 1}</span>
+                      <span>{a.label}</span>
+                      <span style={{
+                        color: variant === 'brass' ? 'var(--fg-accent)' : variant === 'danger' ? 'var(--c-oxide)' : 'var(--fg-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: 'var(--ls-wide)',
+                        fontSize: 10.5,
+                      }}>{variant}</span>
+                      <span style={{ color: 'var(--fg-muted)' }}>[{a.hotkey ?? '—'}]</span>
+                    </div>
+                  )
+                })}
                 <Button style={{ alignSelf: 'flex-start', marginTop: 4 }}>+ Add action</Button>
               </div>
             </dd>

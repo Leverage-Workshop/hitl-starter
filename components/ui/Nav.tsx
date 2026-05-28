@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { CLIENT, WORKFLOWS } from '@/lib/data'
+import { CLIENT } from '@/lib/data'
+import { ALL_WORKFLOWS } from '@/lib/contract/seed'
 import { BracketMark } from './BracketMark'
 
 interface NavProps {
@@ -41,30 +42,31 @@ export function Nav({ workflowId }: NavProps) {
           <div className="nav__section-label">Workflows</div>
         </div>
         <ul className="nav__list">
-          {WORKFLOWS.map((wf) => (
-            <li
-              key={wf.id}
-              className={
-                'nav__item ' +
-                (page === 'dashboard' && wf.id === workflowId ? 'nav__item--active' : '')
-              }
-              onClick={() => pickWorkflow(wf.id)}
-            >
-              <span className="nav__item-name">
-                <span className={
-                  'nav__item-dot ' +
-                  (wf.status === 'idle' ? 'nav__item-dot--idle' : '') +
-                  (wf.status === 'off'  ? 'nav__item-dot--off'  : '')
-                } />
-                {wf.name}
-              </span>
-              <span className="nav__item-count">
-                {wf.pending > 0
-                  ? `${wf.pending}`
-                  : wf.cadence === '—' ? '—' : ''}
-              </span>
-            </li>
-          ))}
+          {ALL_WORKFLOWS.map((wf) => {
+            const pendingCount = wf.stats.find((s) => s.emphasized)?.value ?? 0
+            const dotClass =
+              'nav__item-dot ' +
+              (wf.status === 'idle' || wf.status === 'paused' ? 'nav__item-dot--idle' : '') +
+              (wf.status === 'error' ? 'nav__item-dot--off' : '')
+            return (
+              <li
+                key={wf.id}
+                className={
+                  'nav__item ' +
+                  (page === 'dashboard' && wf.id === workflowId ? 'nav__item--active' : '')
+                }
+                onClick={() => pickWorkflow(wf.id)}
+              >
+                <span className="nav__item-name">
+                  <span className={dotClass} />
+                  {wf.name}
+                </span>
+                <span className="nav__item-count">
+                  {Number(pendingCount) > 0 ? String(pendingCount) : ''}
+                </span>
+              </li>
+            )
+          })}
         </ul>
 
         <div className="nav__divider"></div>

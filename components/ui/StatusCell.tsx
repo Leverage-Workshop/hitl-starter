@@ -1,4 +1,4 @@
-import type { ItemStatus } from '@/lib/types'
+import type { ItemStatus } from '@/lib/contract'
 
 export function StatusCell({ s }: { s: ItemStatus }) {
   return (

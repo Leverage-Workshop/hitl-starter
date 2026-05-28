@@ -2,14 +2,22 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ACTION_SET, ACTIVE_WORKFLOW_ID, ITEMS, STATS, WORKFLOWS } from '@/lib/data'
-import { fmtMoney, fmtRelative } from '@/lib/format'
-import type { WorkflowItem } from '@/lib/types'
+import { ACTIVE_WORKFLOW_ID } from '@/lib/data'
+import { ALL_WORKFLOWS } from '@/lib/contract/seed'
+import {
+  bulkActions,
+  intentToVariant,
+  resolveItemActions,
+  singleActions,
+  type Item,
+  type Workflow,
+} from '@/lib/contract'
+import { fmtRelative } from '@/lib/format'
+import { renderCell, tdClass } from '@/lib/renderField'
 import { DetailFlyout } from '@/components/Flyout'
 import { Button } from '@/components/ui/Button'
 import { Nav } from '@/components/ui/Nav'
 import { PrioCell } from '@/components/ui/PrioCell'
-import { Score } from '@/components/ui/Score'
 import { StatusCell } from '@/components/ui/StatusCell'
 import { Topbar } from '@/components/ui/Topbar'
 
@@ -26,6 +34,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub: st
 
 // -- Queue table ----------------------------------------------
 function QueueTable({
+  workflow,
   items,
   selected,
   onToggleOne,
@@ -33,7 +42,8 @@ function QueueTable({
   onOpen,
   activeId,
 }: {
-  items: WorkflowItem[]
+  workflow: Workflow
+  items: Item[]
   selected: Set<string>
   onToggleOne: (id: string) => void
   onToggleAll: (checked: boolean) => void
@@ -43,6 +53,7 @@ function QueueTable({
   const allChecked = items.length > 0 && items.every((i) => selected.has(i.id))
   const someChecked = items.some((i) => selected.has(i.id))
   const headRef = useRef<HTMLInputElement>(null)
+  const tableCols = workflow.itemSchema.filter((f) => f.showInTable)
 
   useEffect(() => {
     if (headRef.current) headRef.current.indeterminate = someChecked && !allChecked
@@ -65,11 +76,11 @@ function QueueTable({
             <th>ID</th>
             <th>STATUS</th>
             <th>PRIORITY</th>
-            <th>SUBJECT</th>
-            <th>FROM</th>
-            <th className="num">VALUE</th>
-            <th className="num">CONF</th>
-            <th className="num">ATCH</th>
+            {tableCols.map((f) => (
+              <th key={f.key} className={tdClass(f)}>
+                {f.label.toUpperCase()}
+              </th>
+            ))}
             <th className="num">SUBMITTED</th>
           </tr>
         </thead>
@@ -98,12 +109,12 @@ function QueueTable({
                 <td className="mono accent">{it.id}</td>
                 <td><StatusCell s={it.status} /></td>
                 <td><PrioCell p={it.priority} /></td>
-                <td>{it.subject}</td>
-                <td className="mono muted">{it.from}</td>
-                <td className="num">{fmtMoney(it.value)}</td>
-                <td className="num">{it.score ? <Score v={it.score} /> : <span className="muted">—</span>}</td>
-                <td className="num muted">{it.attachments || '—'}</td>
-                <td className="num muted">{fmtRelative(it.submitted)}</td>
+                {tableCols.map((f) => (
+                  <td key={f.key} className={tdClass(f)}>
+                    {renderCell(f, it.fields[f.key])}
+                  </td>
+                ))}
+                <td className="num muted">{fmtRelative(it.createdAt)}</td>
               </tr>
             )
           })}
@@ -115,45 +126,71 @@ function QueueTable({
 
 // -- Queue cards ----------------------------------------------
 function QueueCards({
+  workflow,
   items,
   onOpen,
   activeId,
   onQuickAction,
 }: {
-  items: WorkflowItem[]
+  workflow: Workflow
+  items: Item[]
   onOpen: (id: string) => void
   activeId: string | null
-  onQuickAction: (id: string, action: string) => void
+  onQuickAction: (id: string, actionId: string) => void
 }) {
+  const titleField = workflow.itemSchema.find((f) => f.type === 'text')
+  const cardFields = workflow.itemSchema.filter(
+    (f) => f.showInCard && f.key !== titleField?.key,
+  )
+
   return (
     <div className="cards">
-      {items.map((it) => (
-        <div
-          key={it.id}
-          className={'card-item card-item--' + it.priority + (it.id === activeId ? ' active' : '')}
-          onClick={() => onOpen(it.id)}
-        >
-          <div className="card-item__head">
-            <div>
-              <div className="card-item__id">{it.id}</div>
-              <div className="card-item__title">{it.subject}</div>
+      {items.map((it) => {
+        const cardTitle = titleField
+          ? String(it.fields[titleField.key] ?? it.summary)
+          : it.summary
+        const singles = singleActions(workflow, it)
+        const primary = singles.find((a) => a.intent === 'primary')
+        const destructive = singles.find((a) => a.intent === 'destructive')
+
+        return (
+          <div
+            key={it.id}
+            className={'card-item card-item--' + it.priority + (it.id === activeId ? ' active' : '')}
+            onClick={() => onOpen(it.id)}
+          >
+            <div className="card-item__head">
+              <div>
+                <div className="card-item__id">{it.id}</div>
+                <div className="card-item__title">{cardTitle}</div>
+              </div>
+              <PrioCell p={it.priority} />
             </div>
-            <PrioCell p={it.priority} />
+            <div className="card-item__summary">{it.summary}</div>
+            <div className="card-item__meta">
+              {cardFields.map((f) => (
+                <span key={f.key}>
+                  {f.label.toUpperCase()} · <b>{renderCell(f, it.fields[f.key])}</b>
+                </span>
+              ))}
+              <span>{fmtRelative(it.createdAt)} AGO</span>
+            </div>
+            <div className="card-item__actions" onClick={(e) => e.stopPropagation()}>
+              {primary && (
+                <Button variant="brass" onClick={() => onQuickAction(it.id, primary.id)}>
+                  {primary.label}
+                </Button>
+              )}
+              <Button onClick={() => onOpen(it.id)}>Review</Button>
+              {destructive && (
+                <Button variant="danger" onClick={() => onQuickAction(it.id, destructive.id)}>
+                  {destructive.label}
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="card-item__summary">{it.summary}</div>
-          <div className="card-item__meta">
-            <span>FROM · <b>{it.from.split('@')[1]}</b></span>
-            <span>VAL · <b>{fmtMoney(it.value)}</b></span>
-            <span>CONF · <b>{it.score || '—'}</b></span>
-            <span>{fmtRelative(it.submitted)} AGO</span>
-          </div>
-          <div className="card-item__actions" onClick={(e) => e.stopPropagation()}>
-            <Button variant="brass" onClick={() => onQuickAction(it.id, 'approve')}>Approve</Button>
-            <Button onClick={() => onOpen(it.id)}>Review</Button>
-            <Button variant="danger" onClick={() => onQuickAction(it.id, 'reject')}>Reject</Button>
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -162,31 +199,39 @@ function QueueCards({
 export default function DashboardPage() {
   return (
     <Suspense fallback={null}>
-      <DashboardContent />
+      <DashboardInner />
     </Suspense>
   )
 }
 
-function DashboardContent() {
-  const router = useRouter()
+function DashboardInner() {
   const searchParams = useSearchParams()
   const workflowId = searchParams?.get('workflow') ?? ACTIVE_WORKFLOW_ID
-  const workflow = WORKFLOWS.find((w) => w.id === workflowId) ?? WORKFLOWS[0]
+  return <DashboardContent key={workflowId} workflowId={workflowId} />
+}
 
-  const [items, setItems] = useState<WorkflowItem[]>(ITEMS)
-  const [view, setView] = useState<'table' | 'cards'>('table')
+function DashboardContent({ workflowId }: { workflowId: string }) {
+  const router = useRouter()
+  const workflow =
+    ALL_WORKFLOWS.find((w) => w.id === workflowId) ?? ALL_WORKFLOWS[0]
+  const workflowIndex = ALL_WORKFLOWS.findIndex((w) => w.id === workflow.id) + 1
+
+  const [items, setItems] = useState<Item[]>(workflow.items)
+  const [view, setView] = useState<'table' | 'cards'>(workflow.defaultView)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((i) =>
-      !q ||
-      i.subject.toLowerCase().includes(q) ||
-      i.from.toLowerCase().includes(q) ||
-      i.id.toLowerCase().includes(q)
-    )
+    return items.filter((i) => {
+      if (!q) return true
+      if (i.id.toLowerCase().includes(q)) return true
+      if (i.summary.toLowerCase().includes(q)) return true
+      return Object.values(i.fields).some((v) =>
+        String(v ?? '').toLowerCase().includes(q),
+      )
+    })
   }, [items, query])
 
   const openItem = items.find((i) => i.id === openId) ?? null
@@ -199,38 +244,50 @@ function DashboardContent() {
     })
   }, [])
 
-  const toggleAll = useCallback((checked: boolean) => {
-    if (!checked) return setSelected(new Set())
-    setSelected(new Set(visible.map((i) => i.id)))
-  }, [visible])
+  const toggleAll = useCallback(
+    (checked: boolean) => {
+      if (!checked) return setSelected(new Set())
+      setSelected(new Set(visible.map((i) => i.id)))
+    },
+    [visible],
+  )
 
   const clearSelection = useCallback(() => setSelected(new Set()), [])
 
-  const applyToSelected = useCallback((action: string) => {
-    setItems((arr) =>
-      arr.map((i) =>
-        selected.has(i.id)
-          ? { ...i, status: action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : i.status }
-          : i
-      )
-    )
-    clearSelection()
-  }, [selected, clearSelection])
+  const applyToOne = useCallback(
+    (id: string, actionId: string) => {
+      const item = items.find((i) => i.id === id)
+      if (!item) return
+      const action = resolveItemActions(workflow, item).find((a) => a.id === actionId)
+      if (action?.resultingStatus) {
+        const status = action.resultingStatus
+        setItems((arr) => arr.map((i) => (i.id === id ? { ...i, status } : i)))
+      }
+    },
+    [items, workflow],
+  )
 
-  const applyToOne = useCallback((id: string, action: string) => {
-    setItems((arr) =>
-      arr.map((i) =>
-        i.id === id
-          ? { ...i, status: action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : i.status }
-          : i
-      )
-    )
-  }, [])
+  const applyToSelected = useCallback(
+    (actionId: string) => {
+      const action = workflow.availableActions.find((a) => a.id === actionId)
+      if (action?.resultingStatus) {
+        const status = action.resultingStatus
+        setItems((arr) =>
+          arr.map((i) => (selected.has(i.id) ? { ...i, status } : i)),
+        )
+      }
+      clearSelection()
+    },
+    [selected, workflow, clearSelection],
+  )
 
-  const handleAction = useCallback((id: string, key: string) => {
-    if (key === 'approve' || key === 'reject') applyToOne(id, key)
-    setOpenId(null)
-  }, [applyToOne])
+  const handleAction = useCallback(
+    (id: string, actionId: string) => {
+      applyToOne(id, actionId)
+      setOpenId(null)
+    },
+    [applyToOne],
+  )
 
   // keyboard shortcuts
   useEffect(() => {
@@ -239,10 +296,12 @@ function DashboardContent() {
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
       if (e.key === 'Escape') { setOpenId(null); return }
       if (openId) {
-        for (const a of ACTION_SET) {
-          if (e.key.toUpperCase() === a.hotkey) {
+        const item = items.find((i) => i.id === openId)
+        if (!item) return
+        for (const a of singleActions(workflow, item)) {
+          if (a.hotkey && e.key.toUpperCase() === a.hotkey) {
             e.preventDefault()
-            handleAction(openId, a.key)
+            handleAction(openId, a.id)
             return
           }
         }
@@ -250,17 +309,18 @@ function DashboardContent() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openId, handleAction])
+  }, [openId, items, workflow, handleAction])
 
   const liveStats = useMemo(() => {
-    const pending = items.filter((i) => i.status === 'pending').length
-    const approved = items.filter((i) => i.status === 'approved').length
-    return [
-      { label: 'PENDING',          value: String(pending),         sub: 'in queue' },
-      { label: 'APPROVED // 7D',   value: String(34 + approved),   sub: '+ 6 vs prior 7d' },
-      ...STATS.slice(2),
-    ]
-  }, [items])
+    const pendingCount = items.filter((i) => i.status === 'pending').length
+    return workflow.stats.map((s) => ({
+      label: s.label,
+      value: s.emphasized ? String(pendingCount) : String(s.value),
+      sub: s.trend ?? s.unit ?? '',
+    }))
+  }, [items, workflow.stats])
+
+  const bulk = bulkActions(workflow)
 
   return (
     <div className="app">
@@ -277,18 +337,17 @@ function DashboardContent() {
         <div className="page">
           {/* header */}
           <div>
-            <div className="page-header__eyebrow">WORKFLOW // 03</div>
+            <div className="page-header__eyebrow">
+              WORKFLOW // {String(workflowIndex).padStart(2, '0')}
+            </div>
             <div className="page-header__title-row">
               <h1 className="page-header__title">{workflow.name}</h1>
               <span className="status">
-                <span className="dot"></span>RUNNING
+                {workflow.status === 'running' && <span className="dot"></span>}
+                {workflow.status.toUpperCase()}
               </span>
             </div>
-            <p className="page-header__desc">
-              Reads inbound RFP emails, drafts a first response in the studio voice, attaches the right pricing
-              sheet, and files the thread in the correct CRM pipeline. Flags anything above the confidence
-              floor for a human decision before sending.
-            </p>
+            <p className="page-header__desc">{workflow.description}</p>
           </div>
 
           {/* stats */}
@@ -334,9 +393,15 @@ function DashboardContent() {
                 </div>
                 <div className="bulkbar__actions">
                   <Button onClick={clearSelection}>Clear</Button>
-                  <Button onClick={() => applyToSelected('reassign')}>Reassign</Button>
-                  <Button variant="danger" onClick={() => applyToSelected('reject')}>Reject selected</Button>
-                  <Button variant="brass" onClick={() => applyToSelected('approve')}>Approve selected</Button>
+                  {bulk.map((a) => (
+                    <Button
+                      key={a.id}
+                      variant={intentToVariant[a.intent]}
+                      onClick={() => applyToSelected(a.id)}
+                    >
+                      {a.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
             )}
@@ -346,6 +411,7 @@ function DashboardContent() {
           <div style={{ marginTop: -8 }}>
             {view === 'table' ? (
               <QueueTable
+                workflow={workflow}
                 items={visible}
                 selected={selected}
                 onToggleOne={toggleOne}
@@ -355,6 +421,7 @@ function DashboardContent() {
               />
             ) : (
               <QueueCards
+                workflow={workflow}
                 items={visible}
                 onOpen={setOpenId}
                 activeId={openId}
@@ -369,6 +436,7 @@ function DashboardContent() {
 
         {/* flyout */}
         <DetailFlyout
+          workflow={workflow}
           item={openItem}
           onClose={() => setOpenId(null)}
           onAction={handleAction}

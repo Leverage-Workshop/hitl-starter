@@ -94,6 +94,8 @@ export const workflows = pgTable('workflows', {
   stats: jsonb('stats').$type<Stat[]>().notNull(),
   steps: jsonb('steps').$type<Step[]>().notNull(),
   sources: jsonb('sources').$type<Source[]>().notNull(),
+  /** Per-workflow secret for authenticating inbound webhook requests. */
+  webhookSecret: text('webhook_secret'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -118,6 +120,10 @@ export const workflowItems = pgTable('workflow_items', {
   actions: jsonb('actions').$type<Action[]>(),
   decidedAt: timestamp('decided_at', { withTimezone: true }),
   decidedBy: text('decided_by').references(() => user.id, { onDelete: 'set null' }),
+  /** trigger.dev run ID for the durable outbound dispatch task, if applicable. */
+  outboundDispatchRunId: text('outbound_dispatch_run_id'),
+  /** When the outbound dispatch was initiated. */
+  dispatchedAt: timestamp('dispatched_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

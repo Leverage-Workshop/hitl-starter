@@ -18,13 +18,15 @@ import { z } from "zod";
 export const WorkflowStatus = z.enum(["running", "paused", "error", "idle"]);
 export type WorkflowStatus = z.infer<typeof WorkflowStatus>;
 
-/** `flagged` lives on Priority only — not on ItemStatus — to avoid the overload. */
+/** `flagged` lives on Priority only — not on ItemStatus — to avoid the overload.
+ *  `dispatching` is a transitional state: decision made, outbound webhook in flight. */
 export const ItemStatus = z.enum([
   "pending",
   "approved",
   "rejected",
   "escalated",
   "skipped",
+  "dispatching",
 ]);
 export type ItemStatus = z.infer<typeof ItemStatus>;
 
@@ -146,9 +148,14 @@ export const ActionSchema = z.object({
   /** Keyboard shortcut (single uppercase letter). Wired by the dashboard's
    *  keydown handler; must be unique within a workflow's action set. */
   hotkey: z.string().max(1).optional(),
-  /** Stable handler key the app maps to a webhook endpoint.
-   *  HTTP is the language-neutral seam; no server-side function refs. */
-  handler: z.string(),
+  /** Stable handler key (legacy, no-op) or an explicit webhook target.
+   *  When a `{ url }` object is provided the app dispatches the decision
+   *  outbound via HMAC-signed HTTP POST; a plain string is a no-op key
+   *  retained for backwards compatibility. */
+  handler: z.union([
+    z.string(),
+    z.object({ url: z.string().url(), method: z.string().optional() }),
+  ]),
 });
 export type Action = z.infer<typeof ActionSchema>;
 

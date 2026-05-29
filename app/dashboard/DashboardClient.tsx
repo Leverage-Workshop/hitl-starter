@@ -263,7 +263,7 @@ export function DashboardClient({
       if (action?.resultingStatus) {
         const status = action.resultingStatus as ItemStatus
         setItems((arr) => arr.map((i) => (i.id === id ? { ...i, status } : i)))
-        recordDecision(id, status).then(() => router.refresh())
+        recordDecision(id, actionId, workflow.id).then(() => router.refresh())
       }
     },
     [items, workflow, router],
@@ -278,7 +278,7 @@ export function DashboardClient({
         setItems((arr) =>
           arr.map((i) => (selected.has(i.id) ? { ...i, status } : i)),
         )
-        recordDecisions(ids, status).then(() => router.refresh())
+        recordDecisions(ids, actionId, workflow.id).then(() => router.refresh())
       }
       clearSelection()
     },

@@ -5,4 +5,4 @@ export const CLIENT: ClientIdentity = {
   slug: 'halberd-co',
 }
 
-export const ACTIVE_WORKFLOW_ID = 'rfp-intake'
+export const ACTIVE_WORKFLOW_ID = 'quote-desk'

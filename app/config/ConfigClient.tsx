@@ -76,7 +76,9 @@ export function ConfigClient({
                 <option value="cron">Schedule (cron)</option>
                 <option value="manual">Manual run only</option>
               </select>
-              <div className="desc" style={{ marginTop: 8 }}>Routed via: <span className="mono">email · rfps@halberd-co.com</span></div>
+              {workflow.sources[0] && (
+                <div className="desc" style={{ marginTop: 8 }}>Routed via: <span className="mono">{workflow.sources[0].kind} · {workflow.sources[0].label}</span></div>
+              )}
             </dd>
 
             <dt>Cadence</dt>

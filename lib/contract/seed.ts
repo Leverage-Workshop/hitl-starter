@@ -1,9 +1,14 @@
 /**
- * Contract-valid seed data.
+ * Contract-valid seed data — Halberd & Co (dry-van FTL freight brokerage).
  *
- * Expresses the workflows from lib/data.ts as WorkflowSchema-parsed objects.
- * Each workflow is parsed through the schema so defaults are applied and
- * validation runs at module load time (not lazily).
+ * Each workflow is a WorkflowSchema-parsed object, so defaults are applied and
+ * validation runs at module load time (not lazily). The four workflows mirror
+ * the client brief in docs/clients/halberd-co/ one-for-one.
+ *
+ *   carrier-invoice-reconciliation  → document processing (flagship, full items)
+ *   quote-desk                      → speed-to-lead
+ *   shipper-reactivation            → refresh old leads
+ *   weekly-margin-digest            → internal report generation
  *
  * Run validation:  npx tsx lib/contract/seed.ts
  */
@@ -17,11 +22,389 @@ import {
   type Workflow,
 } from "./index";
 
-/* ------------------------------------------------------------------ */
-/* rfp-intake — full workflow with items                               */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* carrier-invoice-reconciliation — flagship workflow with items       */
+/* ================================================================== */
 
-const RFP_APPROVE: Action = {
+const CIR_APPROVE: Action = {
+  id: "approve",
+  label: "Approve payment",
+  intent: "primary",
+  appliesTo: "both",
+  confirm: false,
+  resultingStatus: "approved",
+  hotkey: "A",
+  handler: "cir.approve",
+};
+
+const CIR_SHORTPAY: Action = {
+  id: "short-pay",
+  label: "Short-pay to rate con",
+  intent: "neutral",
+  appliesTo: "single",
+  confirm: false,
+  resultingStatus: "approved",
+  hotkey: "S",
+  handler: "cir.shortpay",
+};
+
+const CIR_REQUEST_DOCS: Action = {
+  id: "request-docs",
+  label: "Request docs",
+  intent: "neutral",
+  appliesTo: "both",
+  confirm: false,
+  // resultingStatus: holds the item pending until the carrier re-sends
+  resultingStatus: "pending",
+  hotkey: "D",
+  handler: "cir.requestDocs",
+};
+
+const CIR_DISPUTE: Action = {
+  id: "dispute",
+  label: "Dispute / hold",
+  intent: "destructive",
+  appliesTo: "both",
+  confirm: true,
+  resultingStatus: "rejected",
+  hotkey: "X",
+  handler: "cir.dispute",
+};
+
+export const carrierInvoiceReconciliation: Workflow = WorkflowSchema.parse({
+  id: "carrier-invoice-reconciliation",
+  name: "carrier-invoice-reconciliation",
+  description:
+    "Extracts carrier invoices, BOLs, and PODs, three-way matches them to the " +
+    "load's rate confirmation, runs an FMCSA carrier check, and auto-settles " +
+    "clean matches while surfacing exceptions — rate mismatches, missing PODs, " +
+    "unknown loads, carrier flags — for the back office to clear.",
+  status: "running",
+  defaultView: "table",
+  confidenceFloor: 0.9,
+  steps: [
+    { label: "extract", status: "done" },
+    { label: "match", status: "done" },
+    { label: "reconcile", status: "active" },
+    { label: "settle", status: "pending" },
+  ],
+  stats: [
+    { label: "EXCEPTIONS", value: 9, unit: "to clear", emphasized: true },
+    { label: "AUTO-SETTLED // 7D", value: 187, trend: "88% of volume" },
+    { label: "OVERBILLING CAUGHT", value: "$ 4.1k", unit: "this week" },
+    { label: "AVG CLEAR TIME", value: "3m 12s", unit: "open → decide" },
+  ],
+  itemSchema: [
+    { key: "loadNo", label: "Load #", type: "text" },
+    { key: "carrier", label: "Carrier", type: "text" },
+    { key: "billed", label: "Billed", type: "money" },
+    { key: "variance", label: "Variance", type: "money" },
+    { key: "reason", label: "Flag", type: "badge" },
+    { key: "score", label: "Match", type: "score" },
+  ],
+  availableActions: [CIR_APPROVE, CIR_SHORTPAY, CIR_REQUEST_DOCS, CIR_DISPUTE],
+  sources: [
+    { id: "ap-inbox", label: "ap@halberd-co.com", kind: "inbox" },
+    { id: "load", label: "Airtable load record", kind: "database" },
+    { id: "fmcsa", label: "FMCSA QCMobile", kind: "api" },
+  ],
+  items: [
+    {
+      id: "cir-2026-0488",
+      status: "pending",
+      priority: "high",
+      createdAt: "2026-05-29T15:41:09Z",
+      summary:
+        "Ridgeline Carriers billed $2,450 vs rate con $2,200 — +$250 unexplained, no detention noted.",
+      fields: {
+        loadNo: "HC-41902",
+        carrier: "Ridgeline Carriers LLC",
+        billed: 2450,
+        variance: 250,
+        reason: "rate mismatch",
+        score: 62,
+      },
+      sourceContent: `RATE CON  HC-41902
+Lane: Fresno, CA → Dallas, TX  ·  Dry van  ·  PU 05/26  DEL 05/28
+Agreed all-in: $2,200.00   Accessorials authorized: none
+
+CARRIER INVOICE  #RC-8841 (Ridgeline Carriers LLC, MC-774120)
+Line haul: $2,200.00
+"Layover": $250.00
+Invoice total: $2,450.00
+
+POD: signed 05/28 14:02, receiver J. Ruiz — clean.`,
+      proposedOutput: `Discrepancy: invoice $2,450 vs rate con $2,200 (+$250).
+The $250 is billed as "layover" but no detention/layover was authorized on
+the rate con and the POD shows on-time delivery (05/28, within appointment).
+
+Proposed: short-pay to the agreed $2,200 and send the carrier a note citing
+the rate con and the on-time POD. If Ridgeline can document a layover event
+we'll reopen.`,
+      context: [
+        {
+          ref: "[a]",
+          body: "billed − rate con = +$250, mapped to unauthorized 'layover' line",
+          createdAt: "2026-05-29T15:41:00Z",
+        },
+        {
+          ref: "[b]",
+          body: "POD on-time (del 05/28 within appt window) — no detention basis",
+          createdAt: "2026-05-29T15:41:00Z",
+        },
+        {
+          ref: "[c]",
+          body: "FMCSA: MC-774120 authority active, insurance current",
+          createdAt: "2026-05-29T15:42:00Z",
+        },
+      ],
+    },
+    {
+      id: "cir-2026-0487",
+      status: "pending",
+      priority: "normal",
+      createdAt: "2026-05-29T13:22:51Z",
+      summary:
+        "Invoice matches rate con but POD is missing — can't release payment until delivery is proven.",
+      fields: {
+        loadNo: "HC-41887",
+        carrier: "Cobalt Freight Systems",
+        billed: 1875,
+        variance: 0,
+        reason: "missing POD",
+        score: 71,
+      },
+      sourceContent: `RATE CON  HC-41887
+Lane: Atlanta, GA → Charlotte, NC  ·  Dry van  ·  PU 05/27  DEL 05/28
+Agreed all-in: $1,875.00
+
+CARRIER INVOICE  #1182 (Cobalt Freight Systems, MC-661004)
+Line haul: $1,875.00  — matches rate con.
+
+POD: NOT ATTACHED. BOL present (pickup) but no signed delivery receipt.`,
+      proposedOutput: `Amount is clean ($1,875 = rate con). The blocker is the missing POD —
+we don't pay or invoice the customer without proof of delivery.
+
+Proposed: request the signed POD from Cobalt before releasing payment.
+Hold the item pending; auto-resume reconcile once the POD lands.`,
+      context: [
+        {
+          ref: "[a]",
+          body: "amount reconciles to rate con exactly — no rate dispute",
+          createdAt: "2026-05-29T13:22:00Z",
+        },
+        {
+          ref: "[b]",
+          body: "POD absent — workflow rule 'no_pod_no_pay'",
+          createdAt: "2026-05-29T13:23:00Z",
+        },
+      ],
+    },
+    {
+      id: "cir-2026-0486",
+      status: "pending",
+      priority: "normal",
+      createdAt: "2026-05-29T11:08:33Z",
+      summary:
+        "Invoice references load HC-99201 — no matching load in the system. Possible wrong broker.",
+      fields: {
+        loadNo: "HC-99201",
+        carrier: "Sunbelt Logistics Inc",
+        billed: 3120,
+        variance: 0,
+        reason: "no match",
+        score: 0,
+      },
+      sourceContent: `CARRIER INVOICE  #SB-2204 (Sunbelt Logistics Inc, MC-803551)
+Referenced load: HC-99201
+Lane: Laredo, TX → Memphis, TN
+Invoice total: $3,120.00
+
+[system: no load HC-99201 in Airtable; nearest is HC-41201 (different lane,
+different carrier). No rate con on file for this carrier this week.]`,
+      proposedOutput: `No load HC-99201 exists in our system, and Sunbelt isn't booked on any
+open Halberd load this week. Likely a misdirected invoice (wrong broker) or
+a typo'd load number.
+
+Proposed: request clarification from Sunbelt — ask for the rate con / booking
+confirmation tied to this load. Do not create an AP entry.`,
+      context: [
+        {
+          ref: "[a]",
+          body: "load HC-99201 not found; no rate con for MC-803551 this week",
+          createdAt: "2026-05-29T11:08:00Z",
+        },
+        {
+          ref: "[b]",
+          body: "match score 0 — nothing to three-way against",
+          createdAt: "2026-05-29T11:08:00Z",
+        },
+      ],
+    },
+    {
+      id: "cir-2026-0485",
+      status: "pending",
+      priority: "flagged",
+      createdAt: "2026-05-29T09:54:12Z",
+      summary:
+        "FMCSA shows carrier authority INACTIVE as of 05/24 — cannot settle until compliance clears.",
+      fields: {
+        loadNo: "HC-41855",
+        carrier: "Vanguard Haulage LLC",
+        billed: 2640,
+        variance: 0,
+        reason: "carrier flag",
+        score: 40,
+      },
+      // compliance hold — payment is blocked; narrow to docs-request or dispute only
+      actions: [CIR_REQUEST_DOCS, CIR_DISPUTE],
+      sourceContent: `RATE CON  HC-41855
+Lane: Denver, CO → Salt Lake City, UT  ·  Dry van  ·  PU 05/22  DEL 05/23
+Agreed all-in: $2,640.00
+
+CARRIER INVOICE  #VH-557 (Vanguard Haulage LLC, MC-712889)
+Line haul: $2,640.00 — matches rate con. POD signed 05/23, clean.
+
+[FMCSA QCMobile: MC-712889 OPERATING AUTHORITY = INACTIVE (revoked 05/24);
+insurance lapsed 05/24. Load delivered 05/23, before the lapse.]`,
+      proposedOutput: `Dollars and POD are clean and the load delivered 05/23 — one day before
+authority was revoked (05/24). But paying a carrier whose authority is now
+inactive needs a compliance decision, not an AP auto-pass.
+
+Proposed: hold for compliance review. Request current insurance + authority
+reinstatement docs from Vanguard; if they can't produce them, route to
+dispute. Do not release payment on the automated path.`,
+      context: [
+        {
+          ref: "[a]",
+          body: "FMCSA: authority revoked 05/24, insurance lapsed 05/24",
+          createdAt: "2026-05-29T09:54:00Z",
+        },
+        {
+          ref: "[b]",
+          body: "delivery 05/23 predates lapse — load itself was covered",
+          createdAt: "2026-05-29T09:54:00Z",
+        },
+        {
+          ref: "[c]",
+          body: "approve/short-pay withheld — compliance hold per 'carrier_authority' rule",
+          createdAt: "2026-05-29T09:55:00Z",
+        },
+      ],
+    },
+    {
+      id: "cir-2026-0484",
+      status: "pending",
+      priority: "normal",
+      createdAt: "2026-05-28T17:31:40Z",
+      summary:
+        "Detention of $150 billed above rate con — but it's documented with timestamps. Likely valid.",
+      fields: {
+        loadNo: "HC-41840",
+        carrier: "Granite Line Transport",
+        billed: 2050,
+        variance: 150,
+        reason: "accessorial",
+        score: 80,
+      },
+      sourceContent: `RATE CON  HC-41840
+Lane: Columbus, OH → Chicago, IL  ·  Dry van  ·  PU 05/27  DEL 05/28
+Agreed line haul: $1,900.00   Detention: $50/hr after 2 free hrs (authorized)
+
+CARRIER INVOICE  #GLT-9931 (Granite Line Transport, MC-690233)
+Line haul: $1,900.00
+Detention: $150.00 (3 hrs over free time @ $50)
+Total: $2,050.00
+
+POD: signed 05/28; check-in 08:05, departed 13:10. Receiver delays noted.`,
+      proposedOutput: `The +$150 is detention, which the rate con explicitly authorizes at
+$50/hr after 2 free hours. POD timestamps show ~5 hrs on site (08:05–13:10),
+i.e. ~3 billable hours = $150. The math checks.
+
+Proposed: approve payment at $2,050 — accessorial is documented and within
+the authorized rate.`,
+      context: [
+        {
+          ref: "[a]",
+          body: "detention authorized on rate con; 3 billable hrs from POD = $150",
+          createdAt: "2026-05-28T17:31:00Z",
+        },
+        {
+          ref: "[b]",
+          body: "confidence 80 — below 0.9 floor, so held for a human OK",
+          createdAt: "2026-05-28T17:32:00Z",
+        },
+      ],
+    },
+    {
+      id: "cir-2026-0483",
+      status: "pending",
+      priority: "normal",
+      createdAt: "2026-05-28T14:12:07Z",
+      summary:
+        "Looks like a duplicate of invoice #4471 (same load, same amount) already settled 05/27.",
+      fields: {
+        loadNo: "HC-41799",
+        carrier: "Cobalt Freight Systems",
+        billed: 1640,
+        variance: 0,
+        reason: "duplicate",
+        score: 55,
+      },
+      sourceContent: `CARRIER INVOICE  #4488 (Cobalt Freight Systems, MC-661004)
+Load: HC-41799 · Total $1,640.00
+
+[system: load HC-41799 already settled 05/27 against invoice #4471, same
+$1,640.00, AP bill posted. This appears to be a re-send.]`,
+      proposedOutput: `Load HC-41799 was already settled on 05/27 (invoice #4471, $1,640, bill
+posted). Invoice #4488 is the same load and amount — almost certainly a
+duplicate re-send, not a second charge.
+
+Proposed: dispute/hold #4488 as a duplicate and notify Cobalt's AR contact.
+Do not create a second AP bill.`,
+      context: [
+        {
+          ref: "[a]",
+          body: "load + amount match settled invoice #4471 (05/27)",
+          createdAt: "2026-05-28T14:12:00Z",
+        },
+      ],
+    },
+    {
+      id: "cir-2026-0482",
+      status: "approved",
+      priority: "normal",
+      createdAt: "2026-05-28T08:47:55Z",
+      summary:
+        "Clean three-way match (invoice = rate con, POD signed, carrier in good standing) — auto-settled.",
+      fields: {
+        loadNo: "HC-41781",
+        carrier: "Cobalt Freight Systems",
+        billed: 1420,
+        variance: 0,
+        reason: "clean",
+        score: 97,
+      },
+      sourceContent:
+        "(auto-settled — invoice $1,420 = rate con, POD signed 05/27, MC-661004 authority active. AP bill posted to QuickBooks.)",
+      proposedOutput:
+        "(clean match above 0.9 floor — settled to QuickBooks with no human touch, 2026-05-28 08:48)",
+      context: [
+        {
+          ref: "[a]",
+          body: "three-way match 97% — above confidence floor, auto-passed",
+          createdAt: "2026-05-28T08:47:00Z",
+        },
+      ],
+    },
+  ],
+});
+
+/* ================================================================== */
+/* quote-desk — speed-to-lead, real-time RFQ intake                    */
+/* ================================================================== */
+
+const QD_APPROVE: Action = {
   id: "approve",
   label: "Approve & send",
   intent: "primary",
@@ -29,21 +412,21 @@ const RFP_APPROVE: Action = {
   confirm: false,
   resultingStatus: "approved",
   hotkey: "A",
-  handler: "rfp.approve",
+  handler: "quote.approve",
 };
 
-const RFP_EDIT: Action = {
-  id: "edit",
-  label: "Edit draft",
+const QD_ADJUST: Action = {
+  id: "adjust",
+  label: "Adjust rate & send",
   intent: "neutral",
   appliesTo: "single",
   confirm: false,
-  // resultingStatus omitted — edit doesn't change lifecycle status
+  resultingStatus: "approved",
   hotkey: "E",
-  handler: "rfp.edit",
+  handler: "quote.adjust",
 };
 
-const RFP_REASSIGN: Action = {
+const QD_REASSIGN: Action = {
   id: "reassign",
   label: "Reassign",
   intent: "neutral",
@@ -51,629 +434,608 @@ const RFP_REASSIGN: Action = {
   confirm: false,
   // resultingStatus omitted — reassign doesn't change lifecycle status
   hotkey: "R",
-  handler: "rfp.reassign",
+  handler: "quote.reassign",
 };
 
-const RFP_REJECT: Action = {
-  id: "reject",
-  label: "Reject",
+const QD_DECLINE: Action = {
+  id: "decline",
+  label: "Decline",
   intent: "destructive",
   appliesTo: "both",
   confirm: true,
   resultingStatus: "rejected",
   hotkey: "X",
-  handler: "rfp.reject",
+  handler: "quote.decline",
 };
 
-export const rfpIntake: Workflow = WorkflowSchema.parse({
-  id: "rfp-intake",
-  name: "rfp-intake",
+export const quoteDesk: Workflow = WorkflowSchema.parse({
+  id: "quote-desk",
+  name: "quote-desk",
   description:
-    "Reads inbound RFP emails, drafts a first response in the studio voice, " +
-    "attaches the right pricing sheet, and files the thread in the correct " +
-    "CRM pipeline. Flags anything above the confidence floor for a human " +
-    "decision before sending.",
+    "Parses inbound shipper RFQs, anchors a rate from Halberd's historical " +
+    "lanes, and drafts a ready-to-send quote so a broker can approve before a " +
+    "competitor answers. Holds low-confidence or thin-history lanes for manual " +
+    "pricing.",
   status: "running",
   defaultView: "table",
-  confidenceFloor: 0.8,
+  confidenceFloor: 0.75,
   steps: [
-    { label: "read", status: "done" },
-    { label: "classify", status: "done" },
-    { label: "draft", status: "active" },
-    { label: "file", status: "pending" },
+    { label: "parse", status: "done" },
+    { label: "rate", status: "active" },
+    { label: "draft", status: "pending" },
+    { label: "send", status: "pending" },
   ],
   stats: [
-    { label: "PENDING", value: 12, unit: "in queue", emphasized: true },
-    { label: "APPROVED // 7D", value: 34, trend: "+6 vs prior 7d" },
-    { label: "AVG DECISION", value: "1m 48s", unit: "open → decide" },
-    { label: "EST. VALUE // 7D", value: "$ 412k", unit: "pipeline reached" },
+    { label: "PENDING", value: 8, unit: "to quote", emphasized: true },
+    { label: "QUOTED // 7D", value: 96, trend: "+14 vs prior 7d" },
+    { label: "AVG RESPONSE", value: "52s", unit: "RFQ → quote" },
+    { label: "WIN RATE // 7D", value: "31%", unit: "quotes booked" },
   ],
   itemSchema: [
-    { key: "subject", label: "Subject", type: "text" },
-    { key: "from", label: "From", type: "email" },
-    { key: "value", label: "Value", type: "money" },
-    { key: "score", label: "Score", type: "score" },
-    { key: "attachments", label: "Attachments", type: "count" },
+    { key: "lane", label: "Lane", type: "text" },
+    { key: "equipment", label: "Equipment", type: "badge" },
+    { key: "pickup", label: "Pickup", type: "datetime" },
+    { key: "rate", label: "Quoted", type: "money" },
+    { key: "score", label: "Confidence", type: "score" },
   ],
-  availableActions: [RFP_APPROVE, RFP_EDIT, RFP_REASSIGN, RFP_REJECT],
+  availableActions: [QD_APPROVE, QD_ADJUST, QD_REASSIGN, QD_DECLINE],
   sources: [
-    { id: "inbox", label: "rfp@halberd-co.com", kind: "inbox" },
-    { id: "crm", label: "CRM pipeline", kind: "crm" },
+    { id: "quotes-inbox", label: "quotes@halberd-co.com", kind: "inbox" },
+    { id: "hubspot-form", label: "HubSpot RFQ form", kind: "crm" },
+    { id: "lane-history", label: "Airtable lane history", kind: "database" },
   ],
   items: [
     {
-      id: "rfp-2026-0142",
+      id: "qd-2026-3310",
       status: "pending",
       priority: "high",
-      createdAt: "2026-05-23T14:32:08Z",
+      createdAt: "2026-05-29T16:02:44Z",
       summary:
-        "Mid-market freight broker; 12-mo telematics + driver-app rollout. Asking pricing by Fri.",
+        "Reefer, Fresno → Dallas, pickup Thu. Strong recent comps; quote ready to fire.",
       fields: {
-        subject: "Northwind Logistics — fleet telematics RFP",
-        from: "procurement@northwind-logistics.com",
-        value: 184000,
-        score: 92,
-        attachments: 6,
+        lane: "Fresno, CA → Dallas, TX",
+        equipment: "reefer",
+        pickup: "2026-06-04T08:00:00Z",
+        rate: 2850,
+        score: 88,
       },
-      sourceContent: `From: procurement@northwind-logistics.com
-To: rfps@halberd-co.com
-Subject: RFP — fleet telematics, 12-mo pilot
+      sourceContent: `From: logistics@valleypack.com
+To: quotes@halberd-co.com
+Subject: Need a reefer Thu — Fresno to Dallas
 
-Hello,
+Hi — got a reefer load, ~42k lbs produce, Fresno to Dallas, pickup Thursday
+AM, deliver Saturday. What can you do on rate? Need to book today.
 
-We are running a procurement cycle for a 12-month telematics rollout across our 240-unit reefer fleet, with a driver-app pilot in the first 60 days. Halberd-Co was recommended by a partner at Stratton Marine.
+— T. Okafor, Valley Pack`,
+      proposedOutput: `Hi T. — yes, we can cover this.
 
-Required by EOW: indicative pricing band, integration notes for our Samsara fleet (we are mid-migration off Geotab), and references in cold-chain. Six attachments include our current MSA template, the IT security questionnaire, and a fleet inventory.
+Fresno → Dallas reefer, ~42k produce, PU Thu 6/4 AM, DEL Sat: all-in
+$2,850, 2 days transit. Rate's good through end of day.
 
-Best,
-M. Avila — Procurement`,
-      proposedOutput: `Hi M. — thanks for reaching out and for the Stratton intro.
+Reply "book it" and I'll dispatch a truck this afternoon.
 
-Quick read on fit: cold-chain reefer telematics is in our wheelhouse (see Granite & Cole and Stratton case studies). The Samsara/Geotab mid-migration is the part that needs a 30-min call — we have a clean migration pattern but it depends on whether you've already cut over the driver IDs.
-
-Indicative pricing band for a 240-unit pilot, 12 months, with the driver-app scope you described: $145k–$185k all-in, weighted to the front for the migration work. Full proposal Wednesday.
-
-References attached. MSA redlines minor; security questionnaire returned Friday.
-
-— J. Grant`,
+— Halberd & Co`,
       context: [
         {
           ref: "[a]",
-          body: "matched against 7 known patterns — pattern 3 (mid-migration), 92% conf.",
-          createdAt: "2026-05-23T14:32:00Z",
+          body: "5 comparable Fresno→Dallas reefer lanes in last 21d: $2,720–$2,980",
+          createdAt: "2026-05-29T16:02:00Z",
         },
         {
           ref: "[b]",
-          body: "pricing band pulled from pricing-sheet-builder · v0.4.2",
-          createdAt: "2026-05-23T14:32:00Z",
-        },
-        {
-          ref: "[c]",
-          body: "Stratton referral verified in CRM (deal 2026-04)",
-          createdAt: "2026-05-23T14:33:00Z",
+          body: "produce-season uplift applied (+6%) — confidence 88",
+          createdAt: "2026-05-29T16:02:00Z",
         },
       ],
     },
     {
-      id: "rfp-2026-0141",
+      id: "qd-2026-3309",
       status: "pending",
       priority: "normal",
-      createdAt: "2026-05-23T13:18:55Z",
-      summary:
-        "Multi-clinic group; wants a triage assistant. Light brief, no security questionnaire yet.",
+      createdAt: "2026-05-29T15:47:18Z",
+      summary: "Dry van, Atlanta → Charlotte, pickup Mon. Dense comps, high confidence.",
       fields: {
-        subject: "Hibiscus Health Group — patient-intake workflow",
-        from: "cto@hibiscushealth.org",
-        value: 64000,
-        score: 78,
-        attachments: 2,
+        lane: "Atlanta, GA → Charlotte, NC",
+        equipment: "dry van",
+        pickup: "2026-06-01T09:00:00Z",
+        rate: 950,
+        score: 92,
       },
-      sourceContent: `From: cto@hibiscushealth.org
-To: rfps@halberd-co.com
-Subject: Quick question — patient intake
+      sourceContent: `HubSpot RFQ form — Pendleton Mfg
+Lane: Atlanta, GA → Charlotte, NC
+Equipment: 53' dry van · Weight: 28,000 lbs
+Pickup: Monday 6/1 · Delivery: Tuesday 6/2
+Notes: recurring lane, standard pallets.`,
+      proposedOutput: `Hi — for the Atlanta → Charlotte dry van (28k, PU Mon 6/1, DEL Tue):
+all-in $950. This is a lane we run weekly, so the rate's firm.
 
-Hi — found you via the Foundry case study. We run six clinics and the front-desk intake is killing us. Could you scope a small assistant similar to what you did for Foundry, but for HIPAA-bound patient intake?
+Happy to set this up as a recurring tender if the volume's steady.
 
-— R. Castellanos, CTO`,
-      proposedOutput: `Hi R. — happy to scope this. Patient intake adjacent to Foundry is plausible, but HIPAA changes the deployment surface materially (BAA, on-prem inference for any PHI touched, audit trail).
-
-Proposed: a 1-week paid diagnostic to draw the current intake flow at one of the six clinics and identify the 3–4 frictions worth automating. Output is a diagram + scoped build proposal. $9k flat. If we proceed to build, the diagnostic cost rolls into the build SOW.
-
-Calendar link below. The earlier we can sit with front-desk staff for 2 hours, the better.
-
-— J. Grant`,
+— Halberd & Co`,
       context: [
         {
           ref: "[a]",
-          body: "HIPAA flag — auto-routes to \"regulated\" subqueue on approve",
-          createdAt: "2026-05-23T13:18:00Z",
-        },
-        {
-          ref: "[b]",
-          body: "Foundry referral verified; no BAA on file yet",
-          createdAt: "2026-05-23T13:19:00Z",
+          body: "lane run 11× in last 30d — tight band $920–$985, confidence 92",
+          createdAt: "2026-05-29T15:47:00Z",
         },
       ],
     },
     {
-      id: "rfp-2026-0140",
+      id: "qd-2026-3308",
       status: "pending",
-      priority: "flagged",
-      createdAt: "2026-05-23T11:47:02Z",
+      priority: "high",
+      createdAt: "2026-05-29T15:30:02Z",
       summary:
-        "Existing client, expansion ask is materially larger than y1 scope. Flagged for senior review.",
+        "Flatbed spillover, Denver → Salt Lake. Thin flatbed history — held for manual pricing.",
       fields: {
-        subject: "Granite & Cole — scope expansion, year 2",
-        from: "ops@granitecole.com",
-        value: 220000,
-        score: 64,
-        attachments: 3,
+        lane: "Denver, CO → Salt Lake City, UT",
+        equipment: "flatbed",
+        pickup: "2026-06-03T07:00:00Z",
+        rate: 0,
+        score: 41,
       },
       sourceContent: `From: ops@granitecole.com
-To: rfps@halberd-co.com
-Subject: Y2 expansion — broader scope
+To: quotes@halberd-co.com
+Subject: Flatbed — Denver to SLC, building materials
 
-Hi J. — really happy with the dispatch assistant. For year 2 we'd like to expand to: (1) driver onboarding chat, (2) maintenance scheduler, (3) customer-comm rewriter, plus a shared dashboard. Three attachments with detail.
+Need a flatbed for palletized building materials, Denver to Salt Lake,
+pickup Wed. ~46k lbs, tarped. Can you quote?
 
-— D. Cole`,
-      proposedOutput: `Hi D. — glad it's working.
-
-Three things at once is more than I'd usually take on solo. Honest framing: I can ship (2) maintenance scheduler in 6 weeks given the data shape I already know, but (1) and (3) need their own diagnostics — driver onboarding has a regulatory layer I haven't measured, and (3) is a tone-of-voice problem that's only worth solving if we can measure it.
-
-Counter-proposal: sequence them. Maint. scheduler now, onboarding diagnostic in parallel, customer-comm last. Total y2 spend lands close to your number; risk profile is much lower.
-
-— J. Grant`,
-      // existing client can't be "rejected" — narrows actions
-      actions: [RFP_APPROVE, RFP_EDIT, RFP_REASSIGN],
+— D. Cole, Granite & Cole`,
+      proposedOutput: `(rate suppressed — only 1 comparable flatbed lane on file, outside the
+14-day window. Recommend a broker price this manually: Denver→SLC flatbed,
+tarped, ~46k. Suggest pulling a live rate before quoting.)`,
       context: [
         {
           ref: "[a]",
-          body: "scope >2× year 1 — flagged per workflow rule \"expansion_ratio\"",
-          createdAt: "2026-05-23T11:47:00Z",
+          body: "flatbed is dry-van spillover for Halberd — only 1 stale comp",
+          createdAt: "2026-05-29T15:30:00Z",
         },
         {
           ref: "[b]",
-          body: "draft confidence 64% — below auto-send threshold (80%)",
-          createdAt: "2026-05-23T11:47:00Z",
-        },
-        {
-          ref: "[c]",
-          body: "recommend reviewer: J. Grant (owner of y1 engagement)",
-          createdAt: "2026-05-23T11:48:00Z",
+          body: "confidence 41 — below 0.75 floor, no auto-draft of a number",
+          createdAt: "2026-05-29T15:30:00Z",
         },
       ],
     },
     {
-      id: "rfp-2026-0139",
+      id: "qd-2026-3307",
       status: "pending",
       priority: "normal",
-      createdAt: "2026-05-23T10:11:43Z",
-      summary: "Inbound RFP with broken attachments. Needs human reach-out.",
+      createdAt: "2026-05-29T14:58:39Z",
+      summary: "Dry van, Chicago → Columbus, pickup Tue. Solid comps, quote drafted.",
       fields: {
-        subject: "Vandermeer Industries — attachment fetch failed",
-        from: "rfp@vandermeer.de",
-        value: 0,
-        score: 0,
-        attachments: 0,
-      },
-      sourceContent: `From: rfp@vandermeer.de
-To: rfps@halberd-co.com
-Subject: RFP packet — Vandermeer Industries
-
-Please find attached our 2026 RFP packet (4 documents).
-
-[system: attachment fetch returned 502 — no documents retrieved]`,
-      proposedOutput: `(draft suppressed — no source material available)
-
-Suggested human action: reply requesting the packet be re-sent via the secure-share link in our footer, or scheduled with the sender for a 15-min walk-through.`,
-      context: [
-        {
-          ref: "[a]",
-          body: "attachment fetch 502 — retried 3×, all failed",
-          createdAt: "2026-05-23T10:11:00Z",
-        },
-        {
-          ref: "[b]",
-          body: "draft suppressed — workflow rule \"no_source_no_draft\"",
-          createdAt: "2026-05-23T10:11:00Z",
-        },
-      ],
-    },
-    {
-      id: "rfp-2026-0138",
-      status: "pending",
-      priority: "normal",
-      createdAt: "2026-05-23T09:04:17Z",
-      summary:
-        "Tight brief, known buyer pattern. Confidence 84%, auto-drafted reply ready.",
-      fields: {
-        subject: "Foundry & Sons — invoice tooling, 1-page brief",
-        from: "finance@foundryandsons.com",
-        value: 48000,
+        lane: "Chicago, IL → Columbus, OH",
+        equipment: "dry van",
+        pickup: "2026-06-02T10:00:00Z",
+        rate: 720,
         score: 84,
-        attachments: 1,
       },
-      sourceContent: `From: finance@foundryandsons.com
-To: rfps@halberd-co.com
-Subject: One-pager — AP reconciliation
+      sourceContent: `From: shipping@northwind-logistics.com
+Subject: Quick quote — Chicago to Columbus
 
-J. — quick one. We need to cut the time my AP clerk spends matching POs to invoices. ~8 hrs/wk now. Can you scope?
+Dry van, 31k lbs, PU Tue 6/2, DEL Wed. Standard freight. Rate?`,
+      proposedOutput: `Hi — Chicago → Columbus dry van (31k, PU Tue 6/2, DEL Wed): all-in $720,
+1 day transit. Good through tomorrow.
 
-— S. Foundry`,
-      proposedOutput: `Hi S. — yes, this is a small, well-shaped problem.
-
-Diagnostic week first (paid, $9k). I'll sit with the AP clerk for two of those eight hours, map what they're actually doing, and we'll know within four days whether automation gets you to 1 hr/wk or 4 hrs/wk. The build, if we proceed, is 4–6 weeks at $32–48k depending on the shape of your ERP integration.
-
-Calendar link below.
-
-— J. Grant`,
+— Halberd & Co`,
       context: [
         {
           ref: "[a]",
-          body: "matched pattern 1 (existing client small-scope) — 84% conf.",
-          createdAt: "2026-05-23T09:04:00Z",
-        },
-        {
-          ref: "[b]",
-          body: "pricing pulled from \"diagnostic-then-build\" template",
-          createdAt: "2026-05-23T09:04:00Z",
+          body: "6 comps last 14d: $690–$760, confidence 84",
+          createdAt: "2026-05-29T14:58:00Z",
         },
       ],
     },
     {
-      id: "rfp-2026-0137",
+      id: "qd-2026-3305",
       status: "approved",
       priority: "normal",
-      createdAt: "2026-05-22T18:50:11Z",
-      summary: "Referral from existing engagement; approved & sent yesterday.",
+      createdAt: "2026-05-29T11:20:11Z",
+      summary: "LA → Phoenix reefer quoted and sent yesterday; awaiting shipper book.",
       fields: {
-        subject: "Stratton Marine — referral follow-up",
-        from: "k.stratton@strattonmarine.com",
-        value: 72000,
-        score: 91,
-        attachments: 4,
+        lane: "Los Angeles, CA → Phoenix, AZ",
+        equipment: "reefer",
+        pickup: "2026-05-31T06:00:00Z",
+        rate: 1180,
+        score: 90,
       },
-      sourceContent: "(see thread #2026-0117 — approved by jgrant 18:50)",
-      proposedOutput: "(sent reply, 2026-05-22 18:51)",
+      sourceContent: "(quoted & sent 2026-05-29 11:21 — LA→Phoenix reefer, $1,180)",
+      proposedOutput: "(sent quote, $1,180 all-in)",
       context: [
         {
           ref: "[a]",
-          body: "auto-approved on threshold — confidence 91%",
-          createdAt: "2026-05-22T18:50:00Z",
-        },
-      ],
-    },
-    {
-      id: "rfp-2026-0136",
-      status: "rejected",
-      priority: "flagged",
-      createdAt: "2026-05-22T16:34:29Z",
-      summary: "Civic outreach unrelated to studio scope. Rejected with referral.",
-      fields: {
-        subject: "Orca Civic — out-of-scope solicitation",
-        from: "partnerships@orcacivic.org",
-        value: 0,
-        score: 22,
-        attachments: 2,
-      },
-      sourceContent: "(rejected as out-of-scope by jgrant 16:34)",
-      proposedOutput: "(declined-with-referral template, sent 2026-05-22 16:35)",
-      context: [
-        {
-          ref: "[a]",
-          body: "flagged as out-of-scope by \"domain_match\" rule",
-          createdAt: "2026-05-22T16:34:00Z",
-        },
-      ],
-    },
-    {
-      id: "rfp-2026-0135",
-      status: "pending",
-      priority: "high",
-      createdAt: "2026-05-22T15:02:48Z",
-      summary:
-        "Proposed change to routing rule \"expansion_ratio\". Needs operator sign-off.",
-      fields: {
-        subject: "Halberd internal — RFP routing rule change",
-        from: "ops@halberd-co.com",
-        value: 0,
-        score: 88,
-        attachments: 1,
-      },
-      sourceContent: `From: ops@halberd-co.com
-Subject: Proposed rule change — expansion_ratio threshold
-
-Currently flags any scope expansion ≥ 2× prior year. Proposing 1.75×. Single attachment with 90-day backtest.`,
-      proposedOutput: `Approve — backtest shows 1.75× catches the two near-misses from Q1 without adding false positives. Recommend approve and re-baseline in 60 days.`,
-      context: [
-        {
-          ref: "[a]",
-          body: "internal item — does not count against external SLA",
-          createdAt: "2026-05-22T15:02:00Z",
-        },
-        {
-          ref: "[b]",
-          body: "backtest reviewed — 0 new false positives in 90d",
-          createdAt: "2026-05-22T15:03:00Z",
-        },
-      ],
-    },
-    {
-      id: "rfp-2026-0134",
-      status: "pending",
-      priority: "normal",
-      createdAt: "2026-05-22T11:18:09Z",
-      summary:
-        "Asking for \"AI strategy\" — too broad for the studio template. Needs scoping reply.",
-      fields: {
-        subject: "Birch & Lowell — broad consulting ask",
-        from: "cmo@birchlowell.com",
-        value: 90000,
-        score: 41,
-        attachments: 2,
-      },
-      sourceContent: `From: cmo@birchlowell.com
-Subject: AI strategy engagement
-
-We'd like to engage you for an AI strategy across our marketing org. Budget ~$90k. Two attachments outline our brand goals for 2026.`,
-      proposedOutput: `Hi — appreciate the note. The studio doesn't take strategy engagements — every build I run starts with a 1-week diagnostic of one specific recurring task, not a roadmap.
-
-If there's one task in your marketing ops that takes >5 hours of someone's week and feels mechanical, I'd love to hear about it specifically. Otherwise, two friends I'd recommend for the strategy work: [redacted] and [redacted].
-
-— J. Grant`,
-      context: [
-        {
-          ref: "[a]",
-          body: "pattern 6 — \"strategy ask without specific task\"",
-          createdAt: "2026-05-22T11:18:00Z",
-        },
-        {
-          ref: "[b]",
-          body: "draft uses decline-with-referral template",
-          createdAt: "2026-05-22T11:18:00Z",
-        },
-      ],
-    },
-    {
-      id: "rfp-2026-0133",
-      status: "pending",
-      priority: "normal",
-      createdAt: "2026-05-22T09:47:55Z",
-      summary:
-        "Looks like a duplicate of thread 2026-05-19/0042. Confirm before drafting.",
-      fields: {
-        subject: "Cedar Quarry — repeat sender, deduped",
-        from: "rfp@cedarquarry.com",
-        value: 36000,
-        score: 73,
-        attachments: 3,
-      },
-      sourceContent: `From: rfp@cedarquarry.com
-Subject: RFP packet (resend)
-
-(this thread appears to be a resend of the earlier 2026-05-19 packet)`,
-      proposedOutput: "(awaiting dedup confirmation — no draft generated)",
-      context: [
-        {
-          ref: "[a]",
-          body: "subject + sender match thread 2026-05-19/0042",
-          createdAt: "2026-05-22T09:47:00Z",
-        },
-        {
-          ref: "[b]",
-          body: "attachments hash identical — recommend dedup",
-          createdAt: "2026-05-22T09:48:00Z",
-        },
-      ],
-    },
-    {
-      id: "rfp-2026-0132",
-      status: "pending",
-      priority: "normal",
-      createdAt: "2026-05-21T17:22:14Z",
-      summary: "Wants an on-site diagnostic week. Travel scoping needed.",
-      fields: {
-        subject: "Pendleton Mfg — site walkthrough request",
-        from: "plant.mgr@pendletonmfg.com",
-        value: 110000,
-        score: 70,
-        attachments: 5,
-      },
-      sourceContent: `From: plant.mgr@pendletonmfg.com
-Subject: Site walkthrough — June
-
-J. — Pendleton would like you on-site for a diagnostic week, mid-June. We are in Akron. Five attachments include our floor plan and shift schedule.`,
-      proposedOutput: `Hi — yes, I do on-site diagnostics. Akron in June works. I'd propose Monday–Thursday on-site (32 hrs in the plant), Friday remote for the writeup. Travel + lodging billed at cost, separate from the $9k diagnostic fee.
-
-Holding June 15–19 for you pending confirmation by Thursday.
-
-— J. Grant`,
-      context: [
-        {
-          ref: "[a]",
-          body: "on-site flag — travel quote auto-attached on send",
-          createdAt: "2026-05-21T17:22:00Z",
-        },
-      ],
-    },
-    {
-      id: "rfp-2026-0131",
-      status: "pending",
-      priority: "normal",
-      createdAt: "2026-05-21T14:09:33Z",
-      summary: "Security questionnaire prereq. 8 attachments, mostly forms.",
-      fields: {
-        subject: "Linwood Capital — vendor security review",
-        from: "security@linwoodcap.com",
-        value: 0,
-        score: 80,
-        attachments: 8,
-      },
-      sourceContent: `Standard vendor security review packet — 8 forms including SOC2 attestations, subprocessor list, data-flow diagram. Response due 7 days from receipt.`,
-      proposedOutput: `(forms pre-populated from security-vault template; 6/8 ready for review, 2 require human input — see flagged fields in vault)`,
-      context: [
-        {
-          ref: "[a]",
-          body: "6 of 8 forms auto-completed from template",
-          createdAt: "2026-05-21T14:09:00Z",
-        },
-        {
-          ref: "[b]",
-          body: "2 forms flagged: subprocessor list (new vendor added Apr), DPA section 4.2",
-          createdAt: "2026-05-21T14:09:00Z",
+          body: "auto-eligible at 90 conf; broker approved & sent",
+          createdAt: "2026-05-29T11:20:00Z",
         },
       ],
     },
   ],
 });
 
-/* ------------------------------------------------------------------ */
-/* Stub workflows (nav items without full item sets)                   */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/* shipper-reactivation — refresh dormant accounts                     */
+/* ================================================================== */
 
-const GENERIC_APPROVE: Action = {
+const SR_APPROVE: Action = {
   id: "approve",
-  label: "Approve",
+  label: "Approve & send",
   intent: "primary",
   appliesTo: "both",
   confirm: false,
   resultingStatus: "approved",
   hotkey: "A",
-  handler: "generic.approve",
+  handler: "react.approve",
 };
 
-const GENERIC_REJECT: Action = {
-  id: "reject",
-  label: "Reject",
-  intent: "destructive",
+const SR_EDIT: Action = {
+  id: "edit",
+  label: "Edit draft",
+  intent: "neutral",
+  appliesTo: "single",
+  confirm: false,
+  resultingStatus: "approved",
+  hotkey: "E",
+  handler: "react.edit",
+};
+
+const SR_SKIP: Action = {
+  id: "skip",
+  label: "Skip",
+  intent: "neutral",
   appliesTo: "both",
-  confirm: true,
-  resultingStatus: "rejected",
-  hotkey: "X",
-  handler: "generic.reject",
+  confirm: false,
+  resultingStatus: "skipped",
+  hotkey: "S",
+  handler: "react.skip",
 };
 
-export const invoiceReconciler: Workflow = WorkflowSchema.parse({
-  id: "invoice-reconciler",
-  name: "invoice-reconciler",
+const SR_ESCALATE: Action = {
+  id: "escalate",
+  label: "Escalate to owner",
+  intent: "neutral",
+  appliesTo: "single",
+  confirm: false,
+  resultingStatus: "escalated",
+  hotkey: "O",
+  handler: "react.escalate",
+};
+
+export const shipperReactivation: Workflow = WorkflowSchema.parse({
+  id: "shipper-reactivation",
+  name: "shipper-reactivation",
   description:
-    "Matches purchase orders to inbound invoices, flags discrepancies, " +
-    "and routes exceptions for human review before posting.",
+    "Sweeps HubSpot and Airtable for shippers that have gone quiet and drafts a " +
+    "tailored re-engagement referencing their past lanes, volume, and a fresh " +
+    "rate. A broker approves, edits, or skips each draft.",
   status: "running",
-  itemSchema: [
-    { key: "vendor", label: "Vendor", type: "text" },
-    { key: "amount", label: "Amount", type: "money" },
-    { key: "score", label: "Match", type: "score" },
+  defaultView: "cards",
+  confidenceFloor: 0.7,
+  steps: [
+    { label: "sweep", status: "done" },
+    { label: "profile", status: "done" },
+    { label: "draft", status: "active" },
+    { label: "send", status: "pending" },
   ],
-  availableActions: [GENERIC_APPROVE, GENERIC_REJECT],
-  stats: [{ label: "PENDING", value: 7, unit: "in queue", emphasized: true }],
-});
-
-export const leadQualifier: Workflow = WorkflowSchema.parse({
-  id: "lead-qualifier",
-  name: "lead-qualifier",
-  description:
-    "Scores inbound leads against ICP criteria and routes qualified " +
-    "leads to the CRM with a recommended next action.",
-  status: "running",
-  itemSchema: [
-    { key: "company", label: "Company", type: "text" },
-    { key: "email", label: "Email", type: "email" },
-    { key: "score", label: "ICP Score", type: "score" },
+  stats: [
+    { label: "DORMANT", value: 14, unit: "accounts", emphasized: true },
+    { label: "REACTIVATED // 30D", value: 5, trend: "+2 vs prior 30d" },
+    { label: "VOLUME AT RISK", value: "$ 88k", unit: "trailing-qtr" },
+    { label: "AVG DORMANCY", value: "9w", unit: "since last tender" },
   ],
-  availableActions: [GENERIC_APPROVE, GENERIC_REJECT],
-  stats: [{ label: "PENDING", value: 18, unit: "in queue", emphasized: true }],
-});
-
-export const ticketTriage: Workflow = WorkflowSchema.parse({
-  id: "ticket-triage",
-  name: "ticket-triage",
-  description:
-    "Classifies inbound support tickets by product area and urgency, " +
-    "drafts an initial response, and routes to the right queue.",
-  status: "running",
-  itemSchema: [
-    { key: "subject", label: "Subject", type: "text" },
-    { key: "from", label: "From", type: "email" },
-    { key: "score", label: "Urgency", type: "score" },
-  ],
-  availableActions: [GENERIC_APPROVE, GENERIC_REJECT],
-  stats: [{ label: "PENDING", value: 3, unit: "in queue", emphasized: true }],
-});
-
-export const onCallSummarizer: Workflow = WorkflowSchema.parse({
-  id: "on-call-summarizer",
-  name: "on-call-summarizer",
-  description:
-    "Produces a daily on-call summary from PagerDuty incidents and " +
-    "Slack threads, ready for the ops standup.",
-  status: "idle",
-  itemSchema: [
-    { key: "date", label: "Date", type: "datetime" },
-    { key: "incidents", label: "Incidents", type: "count" },
-  ],
-  availableActions: [GENERIC_APPROVE],
-  stats: [{ label: "PENDING", value: 0, unit: "in queue", emphasized: true }],
-});
-
-export const weeklyOpsDigest: Workflow = WorkflowSchema.parse({
-  id: "weekly-ops-digest",
-  name: "weekly-ops-digest",
-  description:
-    "Compiles the weekly ops digest from Notion, Linear, and Slack " +
-    "activity, formatted for the Friday all-hands.",
-  status: "idle",
-  itemSchema: [
-    { key: "week", label: "Week", type: "datetime" },
-    { key: "sections", label: "Sections", type: "count" },
-  ],
-  availableActions: [GENERIC_APPROVE],
-  stats: [{ label: "PENDING", value: 0, unit: "in queue", emphasized: true }],
-});
-
-export const churnSignalWatcher: Workflow = WorkflowSchema.parse({
-  id: "churn-signal-watcher",
-  name: "churn-signal-watcher",
-  description:
-    "Monitors product usage and support patterns for churn signals, " +
-    "surfacing at-risk accounts for CSM review.",
-  status: "paused",
   itemSchema: [
     { key: "account", label: "Account", type: "text" },
-    { key: "score", label: "Risk", type: "score" },
+    { key: "topLane", label: "Top lane", type: "text" },
+    { key: "lastTender", label: "Last tender", type: "datetime" },
+    { key: "qtrVolume", label: "Qtr volume", type: "money" },
+    { key: "score", label: "Fit", type: "score" },
   ],
-  availableActions: [GENERIC_APPROVE, GENERIC_REJECT],
-  stats: [{ label: "PENDING", value: 0, unit: "in queue", emphasized: true }],
+  availableActions: [SR_APPROVE, SR_EDIT, SR_SKIP, SR_ESCALATE],
+  sources: [
+    { id: "hubspot", label: "HubSpot deals", kind: "crm" },
+    { id: "tender-history", label: "Airtable tender history", kind: "database" },
+  ],
+  items: [
+    {
+      id: "sr-2026-0061",
+      status: "pending",
+      priority: "high",
+      createdAt: "2026-05-29T07:00:00Z",
+      summary:
+        "Pendleton Mfg — 9 weeks quiet after a steady run. $88k trailing quarter. Strong reactivation fit.",
+      fields: {
+        account: "Pendleton Mfg",
+        topLane: "Akron, OH → Chicago, IL",
+        lastTender: "2026-03-27T00:00:00Z",
+        qtrVolume: 88000,
+        score: 82,
+      },
+      sourceContent: `Account: Pendleton Mfg  ·  Owner: R. Vance
+Last tender: 2026-03-27 (9 weeks ago)
+Trailing-quarter volume: $88,000 across 41 loads
+Top lanes: Akron→Chicago (28), Akron→Detroit (9), Akron→Columbus (4)
+Pattern: steady weekly tenders Jan–Mar, then silence. No lost-reason logged.
+Current Akron→Chicago dry van rate (lane history): ~$840.`,
+      proposedOutput: `Hi R. — it's been a few weeks since we moved a load for Pendleton, and I
+wanted to check in. We ran your Akron → Chicago lane weekly through Q1 and
+had a good rhythm going.
+
+If you've got freight moving again, that lane is sitting around $840 right
+now and I can lock capacity for you. Happy to set up a standing tender so
+it's hands-off on your end.
+
+What's your week look like?
+
+— R. Vance, Halberd & Co`,
+      context: [
+        {
+          ref: "[a]",
+          body: "9w dormant after 41 loads/qtr — clean fade, no lost-reason",
+          createdAt: "2026-05-29T07:00:00Z",
+        },
+        {
+          ref: "[b]",
+          body: "Akron→Chicago current rate $840 pulled from lane history",
+          createdAt: "2026-05-29T07:00:00Z",
+        },
+      ],
+    },
+    {
+      id: "sr-2026-0060",
+      status: "pending",
+      priority: "normal",
+      createdAt: "2026-05-29T07:00:00Z",
+      summary: "Cedar Quarry — 7 weeks quiet, moderate volume. Worth a light touch.",
+      fields: {
+        account: "Cedar Quarry",
+        topLane: "Cedar Rapids, IA → Kansas City, MO",
+        lastTender: "2026-04-10T00:00:00Z",
+        qtrVolume: 36000,
+        score: 74,
+      },
+      sourceContent: `Account: Cedar Quarry  ·  Owner: M. Soto
+Last tender: 2026-04-10 (7 weeks ago)
+Trailing-quarter volume: $36,000 across 18 loads
+Top lane: Cedar Rapids→Kansas City (12)
+Current rate (lane history): ~$1,050.`,
+      proposedOutput: `Hi — checking in from Halberd. We moved a handful of Cedar Rapids → Kansas
+City loads for you this spring and things went quiet. That lane's around
+$1,050 today if you've got materials moving. Want me to grab capacity for
+next week?
+
+— M. Soto, Halberd & Co`,
+      context: [
+        {
+          ref: "[a]",
+          body: "7w dormant, 18 loads/qtr — moderate fit, confidence 74",
+          createdAt: "2026-05-29T07:00:00Z",
+        },
+      ],
+    },
+    {
+      id: "sr-2026-0059",
+      status: "pending",
+      priority: "normal",
+      createdAt: "2026-05-29T07:00:00Z",
+      summary:
+        "Birch & Lowell — erratic history, tiny volume. Low fit; recommend skip or owner judgment.",
+      fields: {
+        account: "Birch & Lowell",
+        topLane: "(no dominant lane)",
+        lastTender: "2026-02-14T00:00:00Z",
+        qtrVolume: 7000,
+        score: 41,
+      },
+      sourceContent: `Account: Birch & Lowell  ·  Owner: (unassigned)
+Last tender: 2026-02-14 (15 weeks ago)
+Trailing-quarter volume: $7,000 across 4 loads, all different lanes
+Pattern: sporadic one-off tenders, no repeat lane. Contact bounced once.`,
+      proposedOutput: `(low-confidence draft withheld — no dominant lane to anchor an offer, and
+the primary contact bounced. Recommend skip, or assign an owner to verify
+the contact before any outreach.)`,
+      context: [
+        {
+          ref: "[a]",
+          body: "no repeat lane + bounced contact — confidence 41, below floor",
+          createdAt: "2026-05-29T07:00:00Z",
+        },
+      ],
+    },
+    {
+      id: "sr-2026-0058",
+      status: "approved",
+      priority: "normal",
+      createdAt: "2026-05-22T07:00:00Z",
+      summary: "Stratton Marine — re-engagement sent last week; replied, one load booked.",
+      fields: {
+        account: "Stratton Marine",
+        topLane: "Tacoma, WA → Portland, OR",
+        lastTender: "2026-03-05T00:00:00Z",
+        qtrVolume: 52000,
+        score: 88,
+      },
+      sourceContent: "(re-engagement approved & sent 2026-05-22; reply received, 1 load tendered 2026-05-27)",
+      proposedOutput: "(sent — referenced Tacoma→Portland lane + $1,310 rate)",
+      context: [
+        {
+          ref: "[a]",
+          body: "reactivated — first tender since 03/05 booked 05/27",
+          createdAt: "2026-05-27T10:00:00Z",
+        },
+      ],
+    },
+  ],
 });
 
-export const pricingSheetBuilder: Workflow = WorkflowSchema.parse({
-  id: "pricing-sheet-builder",
-  name: "pricing-sheet-builder",
+/* ================================================================== */
+/* weekly-margin-digest — internal report generation                  */
+/* ================================================================== */
+
+const WMD_APPROVE: Action = {
+  id: "approve",
+  label: "Approve & post",
+  intent: "primary",
+  appliesTo: "single",
+  confirm: false,
+  resultingStatus: "approved",
+  hotkey: "A",
+  handler: "digest.approve",
+};
+
+const WMD_EDIT: Action = {
+  id: "edit",
+  label: "Edit digest",
+  intent: "neutral",
+  appliesTo: "single",
+  confirm: false,
+  resultingStatus: "approved",
+  hotkey: "E",
+  handler: "digest.edit",
+};
+
+const WMD_HOLD: Action = {
+  id: "hold",
+  label: "Hold",
+  intent: "neutral",
+  appliesTo: "single",
+  confirm: false,
+  resultingStatus: "pending",
+  hotkey: "H",
+  handler: "digest.hold",
+};
+
+const WMD_FLAG: Action = {
+  id: "flag",
+  label: "Flag for review",
+  intent: "neutral",
+  appliesTo: "single",
+  confirm: false,
+  resultingStatus: "escalated",
+  hotkey: "F",
+  handler: "digest.flag",
+};
+
+export const weeklyMarginDigest: Workflow = WorkflowSchema.parse({
+  id: "weekly-margin-digest",
+  name: "weekly-margin-digest",
   description:
-    "Assembles custom pricing sheets from approved templates, " +
-    "surfaces them for human review before attaching to proposals.",
-  status: "running",
-  itemSchema: [
-    { key: "client", label: "Client", type: "text" },
-    { key: "total", label: "Total", type: "money" },
+    "Compiles the weekly internal margin & ops digest — loads moved, gross " +
+    "margin per lane, on-time %, carrier scorecards, and AR aging — from " +
+    "Airtable and QuickBooks. Leadership reviews and approves before it posts " +
+    "to Slack.",
+  status: "idle",
+  defaultView: "cards",
+  confidenceFloor: 0.85,
+  steps: [
+    { label: "pull", status: "done" },
+    { label: "compute", status: "done" },
+    { label: "draft", status: "active" },
+    { label: "post", status: "pending" },
   ],
-  availableActions: [GENERIC_APPROVE, GENERIC_REJECT],
-  stats: [{ label: "PENDING", value: 2, unit: "in queue", emphasized: true }],
+  stats: [
+    { label: "GROSS MARGIN // 7D", value: "$ 47k", unit: "this week", emphasized: true },
+    { label: "LOADS // 7D", value: 213, trend: "+11 vs prior 7d" },
+    { label: "ON-TIME", value: "94%", unit: "delivery" },
+    { label: "AR > 45D", value: "$ 31k", unit: "aging" },
+  ],
+  itemSchema: [
+    { key: "section", label: "Section", type: "badge" },
+    { key: "margin", label: "Margin", type: "money" },
+    { key: "loads", label: "Loads", type: "count" },
+    { key: "onTime", label: "On-time", type: "text" },
+    { key: "weekEnding", label: "Week ending", type: "datetime" },
+  ],
+  availableActions: [WMD_APPROVE, WMD_EDIT, WMD_HOLD, WMD_FLAG],
+  sources: [
+    { id: "airtable-loads", label: "Airtable loads/lanes", kind: "database" },
+    { id: "quickbooks", label: "QuickBooks", kind: "api" },
+  ],
+  items: [
+    {
+      id: "wmd-2026-w22",
+      status: "pending",
+      priority: "normal",
+      createdAt: "2026-05-29T20:00:00Z",
+      summary:
+        "Week ending 5/29 — margin +6% on +11 loads, on-time steady at 94%, AR creeping over 45d.",
+      fields: {
+        section: "full digest",
+        margin: 47000,
+        loads: 213,
+        onTime: "94%",
+        weekEnding: "2026-05-29T00:00:00Z",
+      },
+      sourceContent: `Airtable (loads/lanes), week ending 2026-05-29:
+  Loads moved: 213  (prior wk 202)
+  Revenue: $389,400  ·  Carrier cost: $342,100  ·  Gross margin: $47,300 (12.1%)
+  On-time delivery: 94% (200/213)
+  Top lanes by margin: Fresno→Dallas (reefer), Atlanta→Charlotte, Chicago→Columbus
+  Carrier scorecard: Cobalt 98% OT, Granite Line 95%, Ridgeline 88% (1 layover dispute)
+QuickBooks:
+  AR total: $211k  ·  AR > 45d: $31k (up from $24k)  ·  2 invoices > 60d`,
+      proposedOutput: `*Halberd Weekly — week ending 5/29*
+
+• *Loads:* 213 (+11 vs prior wk)
+• *Gross margin:* $47.3k (12.1%), up ~6%
+• *On-time:* 94% — steady
+• *Top margin lanes:* Fresno→Dallas (reefer), Atlanta→Charlotte, Chicago→Columbus
+• *Carriers:* Cobalt 98% OT, Granite Line 95%; Ridgeline 88% (open layover dispute, HC-41902)
+• *AR watch:* >45d aging up to $31k (from $24k); two invoices now >60d — collections should chase
+
+_Drafted from Airtable + QuickBooks. Review before posting to #leadership._`,
+      context: [
+        {
+          ref: "[a]",
+          body: "margin +6% wk/wk driven by reefer mix (produce season)",
+          createdAt: "2026-05-29T20:00:00Z",
+        },
+        {
+          ref: "[b]",
+          body: "AR >45d flagged: $31k (+$7k wk/wk) — surfaced for collections",
+          createdAt: "2026-05-29T20:00:00Z",
+        },
+        {
+          ref: "[c]",
+          body: "all figures reconciled; confidence 0.9 (above 0.85 floor)",
+          createdAt: "2026-05-29T20:00:00Z",
+        },
+      ],
+    },
+    {
+      id: "wmd-2026-w21",
+      status: "approved",
+      priority: "normal",
+      createdAt: "2026-05-22T20:00:00Z",
+      summary: "Week ending 5/22 — approved and posted to #leadership.",
+      fields: {
+        section: "full digest",
+        margin: 44600,
+        loads: 202,
+        onTime: "93%",
+        weekEnding: "2026-05-22T00:00:00Z",
+      },
+      sourceContent: "(week ending 5/22 — posted to #leadership 2026-05-22 17:30 after edit)",
+      proposedOutput: "(approved & posted; margin $44.6k, 202 loads, 93% OT)",
+      context: [
+        {
+          ref: "[a]",
+          body: "approved after a manual edit to the AR narrative",
+          createdAt: "2026-05-22T17:30:00Z",
+        },
+      ],
+    },
+  ],
 });
 
 /* ------------------------------------------------------------------ */
-/* All workflows — ordered to match the nav in lib/data.ts            */
+/* All workflows — ordered to match the nav (quote-desk lands first)   */
 /* ------------------------------------------------------------------ */
 
 export const ALL_WORKFLOWS: Workflow[] = [
-  rfpIntake,
-  invoiceReconciler,
-  leadQualifier,
-  ticketTriage,
-  onCallSummarizer,
-  weeklyOpsDigest,
-  churnSignalWatcher,
-  pricingSheetBuilder,
+  quoteDesk,
+  shipperReactivation,
+  carrierInvoiceReconciliation,
+  weeklyMarginDigest,
 ];
 
 /* ------------------------------------------------------------------ */
@@ -681,45 +1043,58 @@ export const ALL_WORKFLOWS: Workflow[] = [
 /* ------------------------------------------------------------------ */
 
 if (require.main === module || process.env.RUN_SEED_ASSERTIONS) {
-  const bulk = bulkActions(rfpIntake);
-  const item2 = rfpIntake.items[2]; // Granite & Cole — narrowed to approve+edit+reassign
-  const singles = singleActions(rfpIntake, item2);
-
+  // Flagship: bulk bar shows only the "both"-scoped actions.
+  const bulk = bulkActions(carrierInvoiceReconciliation);
   console.assert(
     JSON.stringify(bulk.map((a) => a.id).sort()) ===
-      JSON.stringify(["approve", "reject"]),
-    `bulk should be [approve, reject], got: ${bulk.map((a) => a.id).join(", ")}`,
+      JSON.stringify(["approve", "dispute", "request-docs"]),
+    `CIR bulk should be [approve, dispute, request-docs], got: ${bulk
+      .map((a) => a.id)
+      .join(", ")}`,
   );
 
+  // The compliance-hold item narrows actions to docs-request / dispute only.
+  const heldItem = carrierInvoiceReconciliation.items.find(
+    (i) => i.id === "cir-2026-0485",
+  )!;
+  const heldSingles = singleActions(carrierInvoiceReconciliation, heldItem);
   console.assert(
-    JSON.stringify(singles.map((a) => a.id).sort()) ===
-      JSON.stringify(["approve", "edit", "reassign"]),
-    `item2 singles should be [approve, edit, reassign], got: ${singles.map((a) => a.id).join(", ")}`,
+    JSON.stringify(heldSingles.map((a) => a.id).sort()) ===
+      JSON.stringify(["dispute", "request-docs"]),
+    `held-item singles should be [dispute, request-docs], got: ${heldSingles
+      .map((a) => a.id)
+      .join(", ")}`,
   );
 
-  // intent → variant mapping is exhaustive
+  // intent → variant mapping is exhaustive.
   console.assert(intentToVariant.primary === "brass", "primary→brass");
   console.assert(intentToVariant.neutral === "ghost", "neutral→ghost");
   console.assert(intentToVariant.destructive === "danger", "destructive→danger");
 
-  // edit/reassign have no resultingStatus
-  const edit = rfpIntake.availableActions.find((a) => a.id === "edit")!;
-  const reassign = rfpIntake.availableActions.find((a) => a.id === "reassign")!;
-  console.assert(
-    edit.resultingStatus === undefined,
-    "edit should not have resultingStatus",
-  );
+  // reassign (quote-desk) is a non-lifecycle action — no resultingStatus.
+  const reassign = quoteDesk.availableActions.find((a) => a.id === "reassign")!;
   console.assert(
     reassign.resultingStatus === undefined,
-    "reassign should not have resultingStatus",
+    "quote-desk reassign should not have resultingStatus",
   );
 
-  // all workflows parse without throwing
-  console.assert(ALL_WORKFLOWS.length === 8, "should have 8 workflows");
+  // Hotkeys are unique within each workflow's action set.
+  for (const wf of ALL_WORKFLOWS) {
+    const keys = wf.availableActions
+      .map((a) => a.hotkey)
+      .filter((k): k is string => !!k);
+    console.assert(
+      new Set(keys).size === keys.length,
+      `${wf.id} has duplicate hotkeys: ${keys.join(", ")}`,
+    );
+  }
+
+  // All workflows parse without throwing.
+  console.assert(ALL_WORKFLOWS.length === 4, "should have 4 workflows");
 
   console.log("OK — all seed assertions pass.");
-  console.log(`  workflows:       ${ALL_WORKFLOWS.length}`);
-  console.log(`  rfp-intake items: ${rfpIntake.items.length}`);
-  console.log(`  bulk actions:    ${bulk.map((a) => a.id).join(", ")}`);
-  console.log(`  item2 singles:   ${singles.map((a) => a.id).join(", ")}`);
+  console.log(`  workflows:            ${ALL_WORKFLOWS.length}`);
+  console.log(`  flagship items:       ${carrierInvoiceReconciliation.items.length}`);
+  console.log(`  bulk actions (CIR):   ${bulk.map((a) => a.id).join(", ")}`);
+  console.log(`  held-item singles:    ${heldSingles.map((a) => a.id).join(", ")}`);
 }

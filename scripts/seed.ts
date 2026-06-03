@@ -22,7 +22,7 @@ async function seed() {
     throw new Error('SEED_ADMIN_PASSWORD is not set in .env')
   }
 
-  const ADMIN_EMAIL = 'caleb@leveragworkshop.com'
+  const ADMIN_EMAIL = 'caleb@leverageworkshop.com'
   const ADMIN_NAME = 'Caleb'
 
   // Check if user already exists in the database

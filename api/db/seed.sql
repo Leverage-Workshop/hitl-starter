@@ -3,10 +3,14 @@
 -- =============================================================================
 -- Populates the operational domain tables for the four-workflow HITL demo.
 --
--- Order of operations (see plan §"Implementation Notes for Claude Code"):
---   1. alembic upgrade head            (apply 001_initial_schema.sql)
---   2. psql < api/db/seed.sql          (THIS FILE — domain tables)
---   3. npx tsx scripts/seed-workflows.ts  (workflows + workflow_items)
+-- Order of operations:
+--   1. alembic upgrade head     (apply 001_initial_schema.sql — from api/)
+--   2. npx tsx scripts/seed.ts  (unified seed — runs THIS FILE, then the
+--                                admin user and workflows/workflow_items)
+--
+-- This file is the source of truth for the domain seed data. It is executed by
+-- the unified scripts/seed.ts (over the Neon WebSocket Pool); it can also be run
+-- directly with psql for the FastAPI/Python side: psql "$URL" -f api/db/seed.sql
 --
 -- Fixed UUIDs are used throughout so that workflow_items seed rows in
 -- lib/contract/seed.ts can reference these domain entities reliably.

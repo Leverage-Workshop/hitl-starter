@@ -66,18 +66,21 @@ cp .env.example .env          # then fill in DATABASE_URL (postgresql+asyncpg://
 # 1. Apply the schema (runs 001_initial_schema.sql)
 cd api && alembic upgrade head
 
-# 2. Seed the domain tables (fixed UUIDs, referenced by the TS workflow seed)
-psql "$PSQL_DATABASE_URL" -f db/seed.sql        # plain postgresql:// URL for psql
-
-# 3. Seed workflows + workflow_items (from the repo root)
-cd .. && npx tsx scripts/seed-workflows.ts
+# 2. Seed everything in one step (from the repo root): admin user, domain
+#    tables (api/db/seed.sql), then workflows + workflow_items
+cd .. && npx tsx scripts/seed.ts
 ```
 
-> `seed.sql` is idempotent — it truncates the five domain tables before
+The unified `scripts/seed.ts` runs the domain `db/seed.sql` over the Neon
+WebSocket Pool, then seeds the admin user and the contract workflows/items — in
+the correct dependency order (domain before workflows).
+
+> `db/seed.sql` is idempotent — it truncates the five domain tables before
 > re-seeding. It never touches `workflows` / `workflow_items`.
 >
-> Use a plain `postgresql://` URL for the `psql` step; the `+asyncpg` scheme is
-> a SQLAlchemy driver selector and is not understood by `psql`.
+> To seed the domain tables alone from the Python side, you can still run the
+> file directly: `psql "$URL" -f db/seed.sql` (use a plain `postgresql://` URL —
+> the `+asyncpg` scheme is a SQLAlchemy driver selector `psql` doesn't understand).
 
 ## Run
 

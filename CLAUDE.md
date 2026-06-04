@@ -14,7 +14,7 @@ npm run build            # production build
 npm run start            # serve the production build
 npx tsc --noEmit         # type check only
 npx tsx lib/contract/seed.ts  # run contract validation assertions
-npx tsx scripts/seed-workflows.ts  # seed DB from contract seed data
+npx tsx scripts/seed.ts  # seed everything: admin user + domain tables + workflows/items
 ```
 
 Vercel deployment: push to `main` and Vercel picks up automatically.
@@ -68,8 +68,7 @@ db/
   schema.ts           ← Drizzle schema: Better Auth tables + workflows + workflow_items
   index.ts            ← lazy getDb() singleton (neon + drizzle)
 scripts/
-  seed.ts             ← seed Better Auth data
-  seed-workflows.ts   ← seed workflows + items from lib/contract/seed.ts
+  seed.ts             ← unified seed: admin user + domain tables (api/db/seed.sql) + workflows/items
 middleware.ts → proxy.ts  ← Next.js 16 auth guard (cookie-based)
 ```
 
@@ -204,7 +203,7 @@ Security: outbound URLs are validated against a per-workflow SSRF allowlist stor
 ## Adding a new workflow
 
 1. Define it in `lib/contract/seed.ts` as a `WorkflowSchema.parse({...})` object.
-2. Run `npx tsx scripts/seed-workflows.ts` to insert it into the DB.
+2. Run `npx tsx scripts/seed.ts` to insert it into the DB.
 3. The nav, dashboard, and config page render it automatically.
 
 No UI code changes needed.

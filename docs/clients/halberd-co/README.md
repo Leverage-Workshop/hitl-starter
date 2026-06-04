@@ -80,6 +80,6 @@ flagship.
 
 This brief is documentation only. Turning it into running workflows — writing the
 `WorkflowSchema.parse({...})` objects into `lib/contract/seed.ts` and running
-`npx tsx scripts/seed-workflows.ts` — is a separate follow-on task. The old
+`npx tsx scripts/seed.ts` — is a separate follow-on task. The old
 automation-studio framing still lingering in `lib/data.ts` and the seed should be cleaned
 up at that time.

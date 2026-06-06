@@ -1,7 +1,7 @@
 """Async SQLAlchemy engine + session factory for the FastAPI service.
 
-The engine is created at import time from settings.database_url (which must use
-the ``postgresql+asyncpg://`` scheme) and disposed on app shutdown via the
+The engine is created at import time from settings.database_url (sourced from
+``API_DATABASE_URL``, must use the ``postgresql+asyncpg://`` scheme) and disposed on app shutdown via the
 FastAPI lifespan handler in api/main.py.
 """
 

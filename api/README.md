@@ -10,76 +10,76 @@ A lightweight data access layer over the shared Neon Postgres database. trigger.
 
 ### Shippers
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `GET` | `/shippers` | `?status=active\|inactive\|prospect` |
-| `GET` | `/shippers/{id}` | |
-| `POST` | `/shippers` | |
-| `PATCH` | `/shippers/{id}` | |
-| `DELETE` | `/shippers/{id}` | |
+| Method   | Path             | Notes                                |
+| -------- | ---------------- | ------------------------------------ |
+| `GET`    | `/shippers`      | `?status=active\|inactive\|prospect` |
+| `GET`    | `/shippers/{id}` |                                      |
+| `POST`   | `/shippers`      |                                      |
+| `PATCH`  | `/shippers/{id}` |                                      |
+| `DELETE` | `/shippers/{id}` |                                      |
 
 ### Carriers
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `GET` | `/carriers` | `?is_active=true\|false &tier=preferred\|backup\|spot` |
-| `GET` | `/carriers/{id}` | |
-| `POST` | `/carriers` | |
-| `PATCH` | `/carriers/{id}` | |
-| `DELETE` | `/carriers/{id}` | |
+| Method   | Path             | Notes                                                  |
+| -------- | ---------------- | ------------------------------------------------------ |
+| `GET`    | `/carriers`      | `?is_active=true\|false &tier=preferred\|backup\|spot` |
+| `GET`    | `/carriers/{id}` |                                                        |
+| `POST`   | `/carriers`      |                                                        |
+| `PATCH`  | `/carriers/{id}` |                                                        |
+| `DELETE` | `/carriers/{id}` |                                                        |
 
 ### Lanes
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `GET` | `/lanes` | `?is_active=true\|false &equipment_code=V\|R\|F\|SD\|DD` |
-| `GET` | `/lanes/{id}` | |
-| `POST` | `/lanes` | |
-| `PATCH` | `/lanes/{id}` | |
-| `DELETE` | `/lanes/{id}` | |
+| Method   | Path          | Notes                                                    |
+| -------- | ------------- | -------------------------------------------------------- |
+| `GET`    | `/lanes`      | `?is_active=true\|false &equipment_code=V\|R\|F\|SD\|DD` |
+| `GET`    | `/lanes/{id}` |                                                          |
+| `POST`   | `/lanes`      |                                                          |
+| `PATCH`  | `/lanes/{id}` |                                                          |
+| `DELETE` | `/lanes/{id}` |                                                          |
 
 ### Loads
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `GET` | `/loads` | `?status= &shipper_id= &carrier_id=` |
-| `GET` | `/loads/{id}` | |
-| `POST` | `/loads` | `gross_margin` is a computed column — never set directly |
-| `PATCH` | `/loads/{id}` | |
-| `DELETE` | `/loads/{id}` | |
+| Method   | Path          | Notes                                                    |
+| -------- | ------------- | -------------------------------------------------------- |
+| `GET`    | `/loads`      | `?status= &shipper_id= &carrier_id=`                     |
+| `GET`    | `/loads/{id}` |                                                          |
+| `POST`   | `/loads`      | `gross_margin` is a computed column — never set directly |
+| `PATCH`  | `/loads/{id}` |                                                          |
+| `DELETE` | `/loads/{id}` |                                                          |
 
 ### Rate Snapshots (append-only)
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `GET` | `/rate-snapshots` | `?load_id= &lane_id=` |
-| `GET` | `/rate-snapshots/{id}` | |
-| `POST` | `/rate-snapshots` | |
+| Method | Path                   | Notes                 |
+| ------ | ---------------------- | --------------------- |
+| `GET`  | `/rate-snapshots`      | `?load_id= &lane_id=` |
+| `GET`  | `/rate-snapshots/{id}` |                       |
+| `POST` | `/rate-snapshots`      |                       |
 
 ### HITL queue
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `GET` | `/workflows` | List all registered workflows |
-| `GET` | `/workflows/{id}` | Workflow config (item schema, actions) |
-| `GET` | `/workflows/{id}/items` | `?status=pending\|approved\|rejected\|…` |
-| `GET` | `/workflow-items/{id}` | |
-| `POST` | `/workflow-items` | Enqueue a draft for review — idempotent on `id` |
-| `PATCH` | `/workflow-items/{id}` | Settle status, revise proposed output, append context |
+| Method  | Path                    | Notes                                                 |
+| ------- | ----------------------- | ----------------------------------------------------- |
+| `GET`   | `/workflows`            | List all registered workflows                         |
+| `GET`   | `/workflows/{id}`       | Workflow config (item schema, actions)                |
+| `GET`   | `/workflows/{id}/items` | `?status=pending\|approved\|rejected\|…`              |
+| `GET`   | `/workflow-items/{id}`  |                                                       |
+| `POST`  | `/workflow-items`       | Enqueue a draft for review — idempotent on `id`       |
+| `PATCH` | `/workflow-items/{id}`  | Settle status, revise proposed output, append context |
 
 ### Workflow query shortcuts
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `GET` | `/workflows/quote-desk/pending` | Loads with `status = pending` |
-| `GET` | `/workflows/shipper-reactivation/dormant` | `?dormant_days_threshold=45` |
-| `GET` | `/workflows/carrier-reconciliation/discrepancies` | Loads with invoice discrepancies |
+| Method | Path                                              | Notes                            |
+| ------ | ------------------------------------------------- | -------------------------------- |
+| `GET`  | `/workflows/quote-desk/pending`                   | Loads with `status = pending`    |
+| `GET`  | `/workflows/shipper-reactivation/dormant`         | `?dormant_days_threshold=45`     |
+| `GET`  | `/workflows/carrier-reconciliation/discrepancies` | Loads with invoice discrepancies |
 
 ### Meta
 
-| Method | Path |
-|--------|------|
-| `GET` | `/health` |
+| Method | Path      |
+| ------ | --------- |
+| `GET`  | `/health` |
 
 Full interactive docs: `http://localhost:8000/docs`
 
@@ -88,7 +88,7 @@ Full interactive docs: `http://localhost:8000/docs`
 ```
 api/
 ├── main.py                  FastAPI app entry point
-├── config.py                Settings (DATABASE_URL, …)
+├── config.py                Settings (API_DATABASE_URL, …)
 ├── requirements.txt
 ├── pyproject.toml
 ├── .python-version          Pins Python 3.12
@@ -121,7 +121,7 @@ api/
 cd api
 uv venv --python 3.12 && source .venv/bin/activate
 uv pip install -r requirements.txt
-cp .env.example .env          # fill in DATABASE_URL (postgresql+asyncpg://…)
+cp .env.example .env          # fill in API_DATABASE_URL (postgresql+asyncpg://…)
 ```
 
 `DATABASE_URL` must use the `postgresql+asyncpg://` scheme.
@@ -145,4 +145,4 @@ uvicorn api.main:app --reload --port 8000   # from the repo root
 ## Deployment
 
 Deployed on **Render** as a Web Service pointed at `api/`. Required env vars:
-`DATABASE_URL` (asyncpg scheme) and any trigger.dev job-verification secrets.
+`API_DATABASE_URL` (asyncpg scheme) and any trigger.dev job-verification secrets.

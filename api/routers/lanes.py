@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.models import Lane
-from api.db.session import get_session
-from api.models.schemas import LaneCreate, LaneOut, LaneUpdate
+from db.models import Lane
+from db.session import get_session
+from models.schemas import LaneCreate, LaneOut, LaneUpdate
 
 router = APIRouter(prefix="/lanes", tags=["lanes"])
 

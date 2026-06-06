@@ -15,11 +15,11 @@ from pathlib import Path
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
-# Make the api/ package importable when alembic runs from the api/ directory.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1].parent))
+# Make the api/ directory importable when alembic runs from api/alembic/.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from api.config import settings  # noqa: E402
-from api.db.models import Base  # noqa: E402
+from config import settings  # noqa: E402
+from db.models import Base  # noqa: E402
 
 config = context.config
 

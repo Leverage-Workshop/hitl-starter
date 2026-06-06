@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.models import Workflow, WorkflowItem
-from api.db.session import get_session
-from api.models.schemas import WorkflowItemCreate, WorkflowItemOut, WorkflowItemUpdate
+from db.models import Workflow, WorkflowItem
+from db.session import get_session
+from models.schemas import WorkflowItemCreate, WorkflowItemOut, WorkflowItemUpdate
 
 router = APIRouter(tags=["hitl"])
 

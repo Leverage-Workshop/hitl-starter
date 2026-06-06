@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.models import Shipper
-from api.db.session import get_session
-from api.models.schemas import ShipperCreate, ShipperOut, ShipperUpdate
+from db.models import Shipper
+from db.session import get_session
+from models.schemas import ShipperCreate, ShipperOut, ShipperUpdate
 
 router = APIRouter(prefix="/shippers", tags=["shippers"])
 

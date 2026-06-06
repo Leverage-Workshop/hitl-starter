@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.models import Carrier
-from api.db.session import get_session
-from api.models.schemas import CarrierCreate, CarrierOut, CarrierUpdate
+from db.models import Carrier
+from db.session import get_session
+from models.schemas import CarrierCreate, CarrierOut, CarrierUpdate
 
 router = APIRouter(prefix="/carriers", tags=["carriers"])
 

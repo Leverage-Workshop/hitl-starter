@@ -2,8 +2,8 @@
 
 Read/write access to the shared Neon database for trigger.dev workflow tasks.
 
-Run locally:
-    uvicorn api.main:app --reload --port 8000
+Run locally (from api/ directory):
+    uvicorn main:app --reload --port 8000
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from api.db.session import engine
-from api.routers import (
+from db.session import engine
+from routers import (
     carrier_reconciliation,
     carriers,
     hitl,

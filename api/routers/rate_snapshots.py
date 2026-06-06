@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.models import RateSnapshot
-from api.db.session import get_session
-from api.models.schemas import RateSnapshotCreate, RateSnapshotOut
+from db.models import RateSnapshot
+from db.session import get_session
+from models.schemas import RateSnapshotCreate, RateSnapshotOut
 
 router = APIRouter(prefix="/rate-snapshots", tags=["rate_snapshots"])
 

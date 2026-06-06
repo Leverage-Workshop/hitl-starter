@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.models import Shipper
-from api.db.session import get_session
-from api.models.schemas import ShipperOut
+from db.models import Shipper
+from db.session import get_session
+from models.schemas import ShipperOut
 
 router = APIRouter(prefix="/workflows/shipper-reactivation", tags=["shipper_reactivation"])
 

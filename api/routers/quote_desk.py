@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.models import Load
-from api.db.session import get_session
-from api.models.schemas import LoadOut
+from db.models import Load
+from db.session import get_session
+from models.schemas import LoadOut
 
 router = APIRouter(prefix="/workflows/quote-desk", tags=["quote_desk"])
 

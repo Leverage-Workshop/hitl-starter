@@ -37,13 +37,13 @@ api/
 Five operational tables, modelled on the Truckstop API data model so a future
 live integration is a connector swap rather than a schema change:
 
-| Table | Purpose |
-|---|---|
-| `shippers` | Customers. Operational layer (Neon); relationship layer lives in HubSpot, joined via `hubspot_company_id`. |
-| `carriers` | Carrier network + FMCSA/CarrierHub compliance fields. |
-| `lanes` | Origin–destination corridors + internal rate history. |
-| `loads` | The atomic unit — joins shipper, carrier, lane. `gross_margin` is a generated column. |
-| `rate_snapshots` | Market rate data captured at quote time (append-only). |
+| Table            | Purpose                                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `shippers`       | Customers. Operational layer (Neon); relationship layer lives in HubSpot, joined via `hubspot_company_id`. |
+| `carriers`       | Carrier network + FMCSA/CarrierHub compliance fields.                                                      |
+| `lanes`          | Origin–destination corridors + internal rate history.                                                      |
+| `loads`          | The atomic unit — joins shipper, carrier, lane. `gross_margin` is a generated column.                      |
+| `rate_snapshots` | Market rate data captured at quote time (append-only).                                                     |
 
 The HITL console's own `workflows` / `workflow_items` tables live in the
 Next.js/Drizzle schema and are **not** created here.
@@ -52,8 +52,8 @@ Next.js/Drizzle schema and are **not** created here.
 
 ```bash
 cd api
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv venv --python 3.12 && source .venv/bin/activate
+uv add -r requirements.txt
 cp .env.example .env          # then fill in DATABASE_URL (postgresql+asyncpg://…)
 ```
 

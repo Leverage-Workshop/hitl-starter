@@ -1,11 +1,11 @@
-"""SQLAlchemy 2.x ORM models for the Halberd & Co domain tables.
+"""SQLAlchemy 2.x ORM models for the shared Neon database.
 
-These mirror api/db/migrations/001_initial_schema.sql exactly — same snake_case
-column names, same constraints. The schema is owned by the raw SQL migration;
-these models are the read/write surface for the FastAPI workflow routers. They
-deliberately do NOT model the HITL console's own tables (``workflows`` /
-``workflow_items``) — those belong to the Next.js/Drizzle side, and FastAPI only
-writes to ``workflow_items`` via raw statements when handing off to HITL review.
+Covers two groups of tables:
+- Domain tables (shippers, carriers, lanes, loads, rate_snapshots) — owned by
+  the Alembic migration in api/db/migrations/001_initial_schema.sql.
+- HITL console tables (workflows, workflow_items) — owned by the Next.js/Drizzle
+  schema. FastAPI models them here so trigger.dev tasks can write items via this
+  data API instead of calling the Next.js inbound webhook directly.
 """
 
 from __future__ import annotations
@@ -359,3 +359,61 @@ class RateSnapshot(Base):
     raw_response: Mapped[dict | None] = mapped_column(JSONB)
 
     load: Mapped["Load | None"] = relationship(back_populates="rate_snapshots")
+
+
+# ---------------------------------------------------------------------------
+# HITL console tables (owned by Next.js/Drizzle, mirrored here for writes)
+# ---------------------------------------------------------------------------
+
+class Workflow(Base):
+    __tablename__ = "workflows"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="idle")
+    default_view: Mapped[str] = mapped_column(Text, nullable=False, default="table")
+    confidence_floor: Mapped[float | None] = mapped_column(Numeric(4, 3))
+    item_schema: Mapped[list] = mapped_column(JSONB, nullable=False)
+    available_actions: Mapped[list] = mapped_column(JSONB, nullable=False)
+    stats: Mapped[list] = mapped_column(JSONB, nullable=False)
+    steps: Mapped[list] = mapped_column(JSONB, nullable=False)
+    sources: Mapped[list] = mapped_column(JSONB, nullable=False)
+    webhook_secret: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    items: Mapped[list["WorkflowItem"]] = relationship(back_populates="workflow")
+
+
+class WorkflowItem(Base):
+    __tablename__ = "workflow_items"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    workflow_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    priority: Mapped[str] = mapped_column(Text, nullable=False, default="normal")
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    fields: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    source_content: Mapped[str | None] = mapped_column(Text)
+    proposed_output: Mapped[str | None] = mapped_column(Text)
+    context: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    actions: Mapped[list | None] = mapped_column(JSONB)
+    decided_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    decided_by: Mapped[str | None] = mapped_column(Text, ForeignKey("user.id", ondelete="SET NULL"))
+    outbound_dispatch_run_id: Mapped[str | None] = mapped_column(Text)
+    dispatched_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    workflow: Mapped["Workflow"] = relationship(back_populates="items")

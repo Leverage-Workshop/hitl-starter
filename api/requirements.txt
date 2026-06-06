@@ -1,4 +1,4 @@
-# Halberd & Co FastAPI workflow service
+# Halberd & Co FastAPI data API
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 sqlalchemy[asyncio]==2.0.36
@@ -8,8 +8,3 @@ pydantic==2.10.4
 pydantic-settings==2.7.0
 python-dotenv==1.0.1
 httpx==0.28.1
-
-# LangGraph / Claude workflow runtime (used by api/workflows/*)
-langgraph==0.2.60
-langchain-anthropic==0.3.1
-anthropic==0.42.0

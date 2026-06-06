@@ -1,9 +1,6 @@
-"""Halberd & Co FastAPI workflow service.
+"""Halberd & Co FastAPI data API.
 
-Entry point for the Render-hosted workflow service. trigger.dev calls these
-endpoints as jobs; each workflow router runs its LangGraph definition, reads/
-writes the Neon domain tables, and hands drafts off to the HITL console by
-writing ``workflow_items`` rows.
+Read/write access to the shared Neon database for trigger.dev workflow tasks.
 
 Run locally:
     uvicorn api.main:app --reload --port 8000
@@ -18,30 +15,43 @@ from fastapi import FastAPI
 from api.db.session import engine
 from api.routers import (
     carrier_reconciliation,
+    carriers,
+    hitl,
+    lanes,
+    loads,
     quote_desk,
+    rate_snapshots,
     shipper_reactivation,
-    weekly_digest,
+    shippers,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup — engine is created at import time in api.db.session
     yield
-    # shutdown — dispose the connection pool cleanly
     await engine.dispose()
 
 
 app = FastAPI(
-    title="Halberd & Co Workflow Service",
-    description="LangGraph HITL workflow runners over the Neon operational schema.",
+    title="Halberd & Co Data API",
+    description="Database access layer for trigger.dev workflow tasks.",
     version="0.1.0",
     lifespan=lifespan,
 )
 
+# Domain CRUD
+app.include_router(shippers.router)
+app.include_router(carriers.router)
+app.include_router(lanes.router)
+app.include_router(loads.router)
+app.include_router(rate_snapshots.router)
+
+# HITL queue
+app.include_router(hitl.router)
+
+# Workflow-specific query shortcuts
 app.include_router(quote_desk.router)
 app.include_router(shipper_reactivation.router)
-app.include_router(weekly_digest.router)
 app.include_router(carrier_reconciliation.router)
 
 

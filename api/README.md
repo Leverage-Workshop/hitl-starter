@@ -1,86 +1,140 @@
-# Halberd & Co — FastAPI Workflow Service
+# Halberd & Co — FastAPI Data API
 
-The workflow-execution half of the `hitl-starter` demo. It runs the four Halberd
-LangGraph workflows over a shared **Neon** Postgres database and hands drafts off
-to the Next.js HITL console by writing `workflow_items` rows.
+A lightweight data access layer over the shared Neon Postgres database. trigger.dev workflow tasks call this API to read and write domain data, and to enqueue items into the HITL review queue.
 
 - **Frontend + HITL console:** Next.js (repo root) → Drizzle → Neon
-- **Workflow execution:** this service (FastAPI) → SQLAlchemy async → Neon
-- **Job queue:** trigger.dev calls these endpoints as jobs
+- **Workflow execution:** trigger.dev tasks → this API → Neon
+- **Human review:** Next.js console reads `workflow_items` via Drizzle
 
-Both services share one Neon database via separate connection strings. FastAPI
-does not expose a data API to the frontend — data fetching stays in Next.js/Drizzle.
+## Endpoints
+
+### Shippers
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/shippers` | `?status=active\|inactive\|prospect` |
+| `GET` | `/shippers/{id}` | |
+| `POST` | `/shippers` | |
+| `PATCH` | `/shippers/{id}` | |
+| `DELETE` | `/shippers/{id}` | |
+
+### Carriers
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/carriers` | `?is_active=true\|false &tier=preferred\|backup\|spot` |
+| `GET` | `/carriers/{id}` | |
+| `POST` | `/carriers` | |
+| `PATCH` | `/carriers/{id}` | |
+| `DELETE` | `/carriers/{id}` | |
+
+### Lanes
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/lanes` | `?is_active=true\|false &equipment_code=V\|R\|F\|SD\|DD` |
+| `GET` | `/lanes/{id}` | |
+| `POST` | `/lanes` | |
+| `PATCH` | `/lanes/{id}` | |
+| `DELETE` | `/lanes/{id}` | |
+
+### Loads
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/loads` | `?status= &shipper_id= &carrier_id=` |
+| `GET` | `/loads/{id}` | |
+| `POST` | `/loads` | `gross_margin` is a computed column — never set directly |
+| `PATCH` | `/loads/{id}` | |
+| `DELETE` | `/loads/{id}` | |
+
+### Rate Snapshots (append-only)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/rate-snapshots` | `?load_id= &lane_id=` |
+| `GET` | `/rate-snapshots/{id}` | |
+| `POST` | `/rate-snapshots` | |
+
+### HITL queue
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/workflows` | List all registered workflows |
+| `GET` | `/workflows/{id}` | Workflow config (item schema, actions) |
+| `GET` | `/workflows/{id}/items` | `?status=pending\|approved\|rejected\|…` |
+| `GET` | `/workflow-items/{id}` | |
+| `POST` | `/workflow-items` | Enqueue a draft for review — idempotent on `id` |
+| `PATCH` | `/workflow-items/{id}` | Settle status, revise proposed output, append context |
+
+### Workflow query shortcuts
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/workflows/quote-desk/pending` | Loads with `status = pending` |
+| `GET` | `/workflows/shipper-reactivation/dormant` | `?dormant_days_threshold=45` |
+| `GET` | `/workflows/carrier-reconciliation/discrepancies` | Loads with invoice discrepancies |
+
+### Meta
+
+| Method | Path |
+|--------|------|
+| `GET` | `/health` |
+
+Full interactive docs: `http://localhost:8000/docs`
 
 ## Layout
 
 ```
 api/
-├── main.py                  FastAPI app (lifespan-managed async engine)
-├── config.py                Settings (DATABASE_URL, ANTHROPIC_API_KEY, …)
+├── main.py                  FastAPI app entry point
+├── config.py                Settings (DATABASE_URL, …)
 ├── requirements.txt
-├── .env.example             Copy to api/.env (separate from the Next.js .env)
+├── pyproject.toml
+├── .python-version          Pins Python 3.12
+├── .env.example             Copy to api/.env
 ├── db/
-│   ├── session.py           Async engine + async_sessionmaker
-│   ├── models.py            SQLAlchemy ORM models (mirror the SQL schema)
+│   ├── session.py           Async engine + session factory
+│   ├── models.py            SQLAlchemy ORM models (domain + HITL tables)
 │   └── migrations/
-│       └── 001_initial_schema.sql   Hand-written schema (source of truth)
-│   └── seed.sql             Domain seed data (fixed UUIDs)
-├── routers/                 One router per workflow
-├── workflows/               LangGraph workflow definitions (one package each)
-├── models/                  Pydantic request/response shapes
+│       └── 001_initial_schema.sql   Domain table schema (source of truth)
+│   └── seed.sql             Domain seed data
+├── routers/
+│   ├── hitl.py              workflow + workflow_items read/write
+│   ├── shippers.py          CRUD
+│   ├── carriers.py          CRUD
+│   ├── lanes.py             CRUD
+│   ├── loads.py             CRUD
+│   ├── rate_snapshots.py    append-only
+│   ├── quote_desk.py        pending RFQ query shortcut
+│   ├── shipper_reactivation.py  dormant shipper query shortcut
+│   └── carrier_reconciliation.py  invoice discrepancy query shortcut
+├── models/
+│   └── schemas.py           Pydantic request/response shapes
 ├── alembic.ini
-└── alembic/                 Migration env (async) + versions/
+└── alembic/                 Migration env + versions/
 ```
-
-## Domain schema
-
-Five operational tables, modelled on the Truckstop API data model so a future
-live integration is a connector swap rather than a schema change:
-
-| Table            | Purpose                                                                                                    |
-| ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `shippers`       | Customers. Operational layer (Neon); relationship layer lives in HubSpot, joined via `hubspot_company_id`. |
-| `carriers`       | Carrier network + FMCSA/CarrierHub compliance fields.                                                      |
-| `lanes`          | Origin–destination corridors + internal rate history.                                                      |
-| `loads`          | The atomic unit — joins shipper, carrier, lane. `gross_margin` is a generated column.                      |
-| `rate_snapshots` | Market rate data captured at quote time (append-only).                                                     |
-
-The HITL console's own `workflows` / `workflow_items` tables live in the
-Next.js/Drizzle schema and are **not** created here.
 
 ## Setup
 
 ```bash
 cd api
 uv venv --python 3.12 && source .venv/bin/activate
-uv add -r requirements.txt
-cp .env.example .env          # then fill in DATABASE_URL (postgresql+asyncpg://…)
+uv pip install -r requirements.txt
+cp .env.example .env          # fill in DATABASE_URL (postgresql+asyncpg://…)
 ```
 
-`DATABASE_URL` **must** use the `postgresql+asyncpg://` scheme — not the plain
-`postgresql://` scheme the Next.js side uses.
+`DATABASE_URL` must use the `postgresql+asyncpg://` scheme.
 
-## Database bootstrap (order matters)
+## Database bootstrap
 
 ```bash
-# 1. Apply the schema (runs 001_initial_schema.sql)
+# 1. Apply the domain schema
 cd api && alembic upgrade head
 
-# 2. Seed everything in one step (from the repo root): admin user, domain
-#    tables (api/db/seed.sql), then workflows + workflow_items
-cd .. && npx tsx scripts/seed.ts
+# 2. Seed everything (from repo root): admin user + domain tables + workflows/items
+npx tsx scripts/seed.ts
 ```
-
-The unified `scripts/seed.ts` runs the domain `db/seed.sql` over the Neon
-WebSocket Pool, then seeds the admin user and the contract workflows/items — in
-the correct dependency order (domain before workflows).
-
-> `db/seed.sql` is idempotent — it truncates the five domain tables before
-> re-seeding. It never touches `workflows` / `workflow_items`.
->
-> To seed the domain tables alone from the Python side, you can still run the
-> file directly: `psql "$URL" -f db/seed.sql` (use a plain `postgresql://` URL —
-> the `+asyncpg` scheme is a SQLAlchemy driver selector `psql` doesn't understand).
 
 ## Run
 
@@ -88,12 +142,7 @@ the correct dependency order (domain before workflows).
 uvicorn api.main:app --reload --port 8000   # from the repo root
 ```
 
-Then e.g. `GET http://localhost:8000/health`,
-`GET /workflows/quote-desk/pending`,
-`GET /workflows/carrier-reconciliation/discrepancies`.
-
 ## Deployment
 
 Deployed on **Render** as a Web Service pointed at `api/`. Required env vars:
-`DATABASE_URL` (asyncpg scheme), `ANTHROPIC_API_KEY`, `BETTER_AUTH_SECRET`, plus
-any trigger.dev job-verification secrets.
+`DATABASE_URL` (asyncpg scheme) and any trigger.dev job-verification secrets.

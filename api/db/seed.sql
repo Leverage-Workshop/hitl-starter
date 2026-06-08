@@ -197,15 +197,35 @@ SELECT
     'internal',
     ld.pickup_date - interval '2 days',
     'booked',
-    round((ln.avg_carrier_rate_per_mile * 0.92)::numeric, 4),
-    ln.avg_carrier_rate_per_mile,
-    round((ln.avg_carrier_rate_per_mile * 1.12)::numeric, 4),
-    0.3200,
+    round((j.avg_rpm * 0.92)::numeric, 4),
+    round(j.avg_rpm::numeric, 4),
+    round((j.avg_rpm * 1.12)::numeric, 4),
+    round((0.3200 * (1 + j.jitter / 2))::numeric, 4),
     ld.equipment_code,
     ld.origin_city, ld.origin_state_code, ld.destination_city, ld.destination_state_code,
     ld.mileage
 FROM loads ld
 JOIN lanes ln ON ln.id = ld.lane_id
+-- Deterministic ±6% jitter keyed off the load id, so snapshots on the same
+-- lane vary instead of all collapsing to the lane average. md5(id) gives a
+-- stable hash → map its low 32 bits into [-0.06, +0.06], then scale the rate.
+--
+-- Hand-authored demo loads (fixed UUIDs, '44444444-…') are pinned to the lane
+-- average (jitter = 0) on purpose: their agreed carrier_rate equals lane-avg ×
+-- miles, so a flat snapshot cleanly corroborates the baseline for the invoice
+-- reconciliation demo. Only the generate_series filler gets variance.
+JOIN LATERAL (
+    SELECT
+        jitter,
+        ln.avg_carrier_rate_per_mile * (1 + jitter) AS avg_rpm
+    FROM (
+        SELECT CASE
+            WHEN ld.id::text LIKE '44444444-%' THEN 0
+            ELSE (('x' || substr(md5(ld.id::text), 1, 8))::bit(32)::int % 1000)
+                 / 1000.0 * 0.12 - 0.06
+        END AS jitter
+    ) h
+) j ON true
 WHERE ld.status IN ('completed', 'paid');
 
 COMMIT;

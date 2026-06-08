@@ -333,6 +333,8 @@ export function DashboardClient({
         <Topbar
           crumbs={['workflows', workflow.name]}
           right={<>
+            <Button onClick={() => router.push('/dashboard')}>Dashboard</Button>
+            <Button onClick={() => router.push('/data')}>Data</Button>
             <Button onClick={() => router.push(`/config?workflow=${workflow.id}`)}>Edit</Button>
             <Button variant="brass">▶ Run now</Button>
           </>}

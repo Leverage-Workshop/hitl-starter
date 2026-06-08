@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PROTECTED = ['/dashboard', '/config', '/settings']
+const PROTECTED = ['/dashboard', '/data', '/config', '/settings']
 
 /**
  * Auth guard — replaces the former hitl_authed cookie check with real
@@ -21,5 +21,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/config/:path*', '/settings/:path*'],
+  matcher: ['/dashboard/:path*', '/data/:path*', '/config/:path*', '/settings/:path*'],
 }

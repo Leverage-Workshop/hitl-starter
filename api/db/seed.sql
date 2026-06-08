@@ -33,18 +33,18 @@ TRUNCATE TABLE rate_snapshots, loads, lanes, carriers, shippers RESTART IDENTITY
 -- shippers (12) — 7 active, 5 inactive; inactive have stale last_load_date
 -- -----------------------------------------------------------------------------
 INSERT INTO shippers (id, hubspot_company_id, company_name, doing_business_as, city, state_code, zip_code, credit_terms_days, status, last_load_date, lifetime_load_count, notes) VALUES
-('11111111-0000-0000-0000-000000000001', 'HS-001', 'Cascade Building Products', 'Cascade BP',        'Portland',       'OR', '97203', 30, 'active',   (CURRENT_DATE - 3),  142, 'Building materials. Reliable weekly volume out of Portland.'),
-('11111111-0000-0000-0000-000000000002', 'HS-002', 'Sierra Foods Distribution',  'Sierra Foods',      'Fresno',         'CA', '93725', 30, 'active',   (CURRENT_DATE - 1),  208, 'Food/ag. Temp-controlled occasionally but mostly dry van.'),
-('11111111-0000-0000-0000-000000000003', 'HS-003', 'Pacific Consumer Goods',     'PCG',               'Los Angeles',    'CA', '90021', 45, 'active',   (CURRENT_DATE - 5),   97, 'Consumer goods. Net 45 terms negotiated last year.'),
-('11111111-0000-0000-0000-000000000004', 'HS-004', 'Granite State Manufacturing','Granite Mfg',       'Phoenix',        'AZ', '85043', 30, 'active',   (CURRENT_DATE - 2),  176, 'Industrial manufacturing. High-value freight.'),
-('11111111-0000-0000-0000-000000000005', 'HS-005', 'Redwood Lumber Co',          'Redwood Lumber',    'Sacramento',     'CA', '95828', 30, 'active',   (CURRENT_DATE - 7),  121, 'Building materials / lumber.'),
-('11111111-0000-0000-0000-000000000006', 'HS-006', 'Desert Bloom Produce',       'Desert Bloom',      'Tucson',         'AZ', '85714', 30, 'active',   (CURRENT_DATE - 4),   88, 'Food/ag. Seasonal produce volume.'),
-('11111111-0000-0000-0000-000000000007', 'HS-007', 'Summit Outdoor Brands',      'Summit Outdoor',    'Boise',          'ID', '83709', 30, 'active',   (CURRENT_DATE - 6),   64, 'Consumer goods — outdoor gear.'),
-('11111111-0000-0000-0000-000000000008', 'HS-008', 'Coastal Packaging Inc',      'Coastal Packaging', 'Oakland',        'CA', '94621', 30, 'inactive', (CURRENT_DATE - 52),  73, 'Lapsed. No load since early spring — reactivation candidate.'),
-('11111111-0000-0000-0000-000000000009', 'HS-009', 'Highline Aggregates',        'Highline',          'Salt Lake City', 'UT', '84104', 30, 'inactive', (CURRENT_DATE - 61),  45, 'Building materials. Went quiet after Q1.'),
-('11111111-0000-0000-0000-000000000010', 'HS-010', 'Valley Fresh Distributors',  'Valley Fresh',      'Reno',           'NV', '89506', 30, 'inactive', (CURRENT_DATE - 74),  39, 'Food/ag. Reactivation candidate — try produce season.'),
-('11111111-0000-0000-0000-000000000011', 'HS-011', 'Northwest Steel Supply',     'NW Steel',          'Seattle',        'WA', '98108', 45, 'inactive', (CURRENT_DATE - 83),  58, 'Manufacturing. Long-standing but dormant.'),
-('11111111-0000-0000-0000-000000000012', 'HS-012', 'Mojave Retail Group',        'Mojave Retail',     'Las Vegas',      'NV', '89118', 30, 'inactive', (CURRENT_DATE - 89),  31, 'Consumer goods. Oldest dormancy in the set.');
+('11111111-0000-0000-0000-000000000001', '326646410948', 'Cascade Building Products', 'Cascade BP',        'Portland',       'OR', '97203', 30, 'active',   (CURRENT_DATE - 3),  142, 'Building materials. Reliable weekly volume out of Portland.'),
+('11111111-0000-0000-0000-000000000002', '326646410950', 'Sierra Foods Distribution',  'Sierra Foods',      'Fresno',         'CA', '93725', 30, 'active',   (CURRENT_DATE - 1),  208, 'Food/ag. Temp-controlled occasionally but mostly dry van.'),
+('11111111-0000-0000-0000-000000000003', '326646410956', 'Pacific Consumer Goods',     'PCG',               'Los Angeles',    'CA', '90021', 45, 'active',   (CURRENT_DATE - 5),   97, 'Consumer goods. Net 45 terms negotiated last year.'),
+('11111111-0000-0000-0000-000000000004', '326646410955', 'Granite State Manufacturing','Granite Mfg',       'Phoenix',        'AZ', '85043', 30, 'active',   (CURRENT_DATE - 2),  176, 'Industrial manufacturing. High-value freight.'),
+('11111111-0000-0000-0000-000000000005', '326646410952', 'Redwood Lumber Co',          'Redwood Lumber',    'Sacramento',     'CA', '95828', 30, 'active',   (CURRENT_DATE - 7),  121, 'Building materials / lumber.'),
+('11111111-0000-0000-0000-000000000006', '326646410958', 'Desert Bloom Produce',       'Desert Bloom',      'Tucson',         'AZ', '85714', 30, 'active',   (CURRENT_DATE - 4),   88, 'Food/ag. Seasonal produce volume.'),
+('11111111-0000-0000-0000-000000000007', '326646410957', 'Summit Outdoor Brands',      'Summit Outdoor',    'Boise',          'ID', '83709', 30, 'active',   (CURRENT_DATE - 6),   64, 'Consumer goods — outdoor gear.'),
+('11111111-0000-0000-0000-000000000008', '326646410947', 'Coastal Packaging Inc',      'Coastal Packaging', 'Oakland',        'CA', '94621', 30, 'inactive', (CURRENT_DATE - 52),  73, 'Lapsed. No load since early spring — reactivation candidate.'),
+('11111111-0000-0000-0000-000000000009', '326646410949', 'Highline Aggregates',        'Highline',          'Salt Lake City', 'UT', '84104', 30, 'inactive', (CURRENT_DATE - 61),  45, 'Building materials. Went quiet after Q1.'),
+('11111111-0000-0000-0000-000000000010', '326646410951', 'Valley Fresh Distributors',  'Valley Fresh',      'Reno',           'NV', '89506', 30, 'inactive', (CURRENT_DATE - 74),  39, 'Food/ag. Reactivation candidate — try produce season.'),
+('11111111-0000-0000-0000-000000000011', '326646410953', 'Northwest Steel Supply',     'NW Steel',          'Seattle',        'WA', '98108', 45, 'inactive', (CURRENT_DATE - 83),  58, 'Manufacturing. Long-standing but dormant.'),
+('11111111-0000-0000-0000-000000000012', '326646410954', 'Mojave Retail Group',        'Mojave Retail',     'Las Vegas',      'NV', '89118', 30, 'inactive', (CURRENT_DATE - 89),  31, 'Consumer goods. Oldest dormancy in the set.');
 
 -- -----------------------------------------------------------------------------
 -- carriers (18) — 6 preferred, 8 backup, 4 spot; 3 with compliance issues

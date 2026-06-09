@@ -55,6 +55,30 @@
       "dependencies": ["feat-002"],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "feat-008",
+      "name": "Unit testing",
+      "description": "Stand up Vitest for fast, offline unit tests of pure logic: contract Zod schemas and helpers (resolveItemActions, bulkActions, singleActions, intentToVariant in lib/contract/index.ts), formatters (lib/format.ts), and the renderField registry (lib/renderField.tsx). HARNESS WIRING (part of done): add a `test` script to package.json, add `npm test` to init.sh's offline gate, and document it under 'Verification Commands' in CLAUDE.md. Closes the audit's 'Test command documented' gap.",
+      "dependencies": ["feat-001"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-009",
+      "name": "Integration testing",
+      "description": "Integration tests for module boundaries that touch I/O, reusing the Vitest runner from feat-008: inbound webhook route handler (HMAC auth + ItemSchema validation + idempotency on item.id, app/api/workflows/[id]/items/route.ts) and outbound decision dispatch server action (dispatching status + SSRF allowlist, app/actions/decisions.ts), against a mocked/in-memory DB via the db/index.ts getDb() seam. HARNESS WIRING (part of done): add a `test:integration` script, add it to the init.sh gate, and document it in CLAUDE.md Verification Commands.",
+      "dependencies": ["feat-008", "feat-005", "feat-006"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-010",
+      "name": "E2E testing",
+      "description": "Playwright end-to-end coverage of the critical path: login -> dashboard queue -> open detail flyout -> fire a decision (approve/reject) -> verify the item's status changes. Requires a running app + seeded DB, so it is a SEPARATE heavier gate, NOT part of the offline ./init.sh. HARNESS WIRING (part of done): add a `test:e2e` script + playwright config, document it in CLAUDE.md Verification Commands as the manual/heavier gate (with its DB + browser prerequisites), and note in progress.md that it is excluded from the offline gate.",
+      "dependencies": ["feat-002", "feat-003"],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

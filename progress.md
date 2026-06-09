@@ -29,9 +29,15 @@ predate the harness. feat-007 captures fixing them as the first harness-driven t
 
 ### What's Next
 
-1. Define the next concrete feature in `feature_list.json` (replace `feat-007`).
-2. Set its status to `in-progress`, implement it, and run `./init.sh`.
-3. Record evidence and update this log before ending the session.
+1. feat-007 — green the baseline lint gate.
+2. Testing roadmap added to `feature_list.json`: feat-008 (unit, Vitest), feat-009
+   (integration, Vitest over the route handlers / server actions), feat-010 (E2E,
+   Playwright). Each carries its harness-wiring requirement in its description — when
+   implemented, add the script to `package.json`, wire unit + integration into `init.sh`,
+   and document all tiers under 'Verification Commands' in `CLAUDE.md`. E2E stays out of
+   the offline gate (needs a running app + seeded DB).
+3. Set the chosen feature's status to `in-progress`, implement it, run `./init.sh`,
+   record evidence, and update this log before ending the session.
 
 ## Blockers / Risks
 

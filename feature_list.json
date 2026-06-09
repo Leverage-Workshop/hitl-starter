@@ -1,0 +1,60 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Contract system",
+      "description": "Zod-validated Workflow/Item/Action contract that drives all generic UI rendering. Single source of truth — workflows are data, not code.",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "lib/contract/index.ts, lib/contract/seed.ts; `npx tsx lib/contract/seed.ts` validates"
+    },
+    {
+      "id": "feat-002",
+      "name": "Contract-driven dashboard, queue & flyout",
+      "description": "Generic shell renders any workflow's queue (table/cards), detail flyout (source vs proposed panes), bulk actions and hotkeys purely from the contract.",
+      "dependencies": ["feat-001"],
+      "status": "done",
+      "evidence": "app/dashboard/page.tsx, app/dashboard/DashboardClient.tsx, components/Flyout.tsx, lib/renderField.tsx"
+    },
+    {
+      "id": "feat-003",
+      "name": "Authentication & route guard",
+      "description": "Better Auth email/password session plus cookie-based middleware guard redirecting unauthenticated users.",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "lib/auth.ts, lib/auth-client.ts, app/api/auth/[...all]/route.ts, proxy.ts"
+    },
+    {
+      "id": "feat-004",
+      "name": "Database schema & unified seed",
+      "description": "Drizzle schema for workflows + workflow_items alongside Better Auth tables, with one-command idempotent seed (admin user + domain tables + workflows/items).",
+      "dependencies": ["feat-001", "feat-003"],
+      "status": "done",
+      "evidence": "db/schema.ts, db/index.ts, scripts/seed.ts; run `npx tsx scripts/seed.ts` (needs DATABASE_URL)"
+    },
+    {
+      "id": "feat-005",
+      "name": "Inbound webhook ingestion",
+      "description": "POST /api/workflows/[id]/items endpoint: HMAC-authenticated, ItemSchema-validated, idempotent on item.id; external engines enqueue and settle items.",
+      "dependencies": ["feat-001", "feat-004"],
+      "status": "done",
+      "evidence": "app/api/workflows/[id]/items/route.ts; see docs/API.md"
+    },
+    {
+      "id": "feat-006",
+      "name": "Outbound decision dispatch",
+      "description": "Reviewer decisions persist immediately as `dispatching`, then fire an HMAC-signed outbound POST to the action handler URL, validated against a per-workflow SSRF allowlist.",
+      "dependencies": ["feat-005"],
+      "status": "done",
+      "evidence": "app/actions/decisions.ts; see docs/API.md"
+    },
+    {
+      "id": "feat-007",
+      "name": "Green the baseline lint gate",
+      "description": "`./init.sh` currently fails on 3 pre-existing eslint errors: react-hooks/set-state-in-effect in app/dashboard/DashboardClient.tsx:219 and app/data/DataClient.tsx:144, and react/jsx-no-comment-textnodes in app/data/DataClient.tsx:187. `npx tsc --noEmit` is clean. Resolve these (the set-state-in-effect effects intentionally re-sync on prop change — verify behavior is preserved) so the baseline gate passes.",
+      "dependencies": ["feat-002"],
+      "status": "not-started",
+      "evidence": ""
+    }
+  ]
+}

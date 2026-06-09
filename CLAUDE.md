@@ -81,6 +81,14 @@ A feature is done only when ALL of these are true:
 - `npm run build` and `npx tsx scripts/seed.ts` require `DATABASE_URL` + a live Neon DB
   and are **not** part of the fast gate — run them only when explicitly working on
   build/DB concerns.
+- **Tests are not set up yet** (feat-008 unit, feat-009 integration, feat-010 E2E in
+  `feature_list.json`). When implemented: unit + integration join the offline gate above
+  (add their scripts to `init.sh` and list them here); E2E (`npm run test:e2e`, needs a
+  running app + seeded DB) is documented here as a separate heavier gate.
+- **FastAPI service tests** (`api/`, feat-011 unit, feat-012 integration, feat-013
+  migration/schema parity) are a separate Python sub-project — run with
+  `cd api && uv run pytest`. They are NOT part of the npm root gate; integration + parity
+  additionally need a test Postgres. Document them here as their own gate when added.
 
 ## State & Lifecycle Artifacts
 

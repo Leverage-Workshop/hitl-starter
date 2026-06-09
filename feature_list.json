@@ -55,6 +55,54 @@
       "dependencies": ["feat-002"],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "feat-008",
+      "name": "Unit testing",
+      "description": "Stand up Vitest for fast, offline unit tests of pure logic: contract Zod schemas and helpers (resolveItemActions, bulkActions, singleActions, intentToVariant in lib/contract/index.ts), formatters (lib/format.ts), and the renderField registry (lib/renderField.tsx). HARNESS WIRING (part of done): add a `test` script to package.json, add `npm test` to init.sh's offline gate, and document it under 'Verification Commands' in CLAUDE.md. Closes the audit's 'Test command documented' gap.",
+      "dependencies": ["feat-001"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-009",
+      "name": "Integration testing",
+      "description": "Integration tests for module boundaries that touch I/O, reusing the Vitest runner from feat-008: inbound webhook route handler (HMAC auth + ItemSchema validation + idempotency on item.id, app/api/workflows/[id]/items/route.ts) and outbound decision dispatch server action (dispatching status + SSRF allowlist, app/actions/decisions.ts), against a mocked/in-memory DB via the db/index.ts getDb() seam. HARNESS WIRING (part of done): add a `test:integration` script, add it to the init.sh gate, and document it in CLAUDE.md Verification Commands.",
+      "dependencies": ["feat-008", "feat-005", "feat-006"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-010",
+      "name": "E2E testing",
+      "description": "Playwright end-to-end coverage of the critical path: login -> dashboard queue -> open detail flyout -> fire a decision (approve/reject) -> verify the item's status changes. Requires a running app + seeded DB, so it is a SEPARATE heavier gate, NOT part of the offline ./init.sh. HARNESS WIRING (part of done): add a `test:e2e` script + playwright config, document it in CLAUDE.md Verification Commands as the manual/heavier gate (with its DB + browser prerequisites), and note in progress.md that it is excluded from the offline gate.",
+      "dependencies": ["feat-002", "feat-003"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-011",
+      "name": "FastAPI unit testing",
+      "description": "pytest unit tests for pure logic in the FastAPI data API (api/): Pydantic request/response schema validation (api/models/schemas.py), settings/config loading (api/config.py), and any validation/computed helpers. No database required. HARNESS WIRING (part of done): add pytest (+ pytest-asyncio) to api/pyproject.toml dev dependencies, create api/tests/, and document the command `cd api && uv run pytest` under 'Verification Commands' in CLAUDE.md. Note: the FastAPI service is a separate Python sub-project, so this does NOT go in the npm-based root init.sh offline gate.",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-012",
+      "name": "FastAPI integration (API) testing",
+      "description": "pytest integration tests exercising the routers end-to-end via httpx ASGITransport against a disposable test Postgres: domain CRUD (shippers/carriers/lanes/loads/rate-snapshots), HITL queue (POST /workflow-items idempotent on id, PATCH /workflow-items/{id} settle), workflow query shortcuts (quote-desk pending, shipper-reactivation dormant, carrier-reconciliation discrepancies), /health, and 404/validation error paths. Override the db.session engine with a test DATABASE_URL (asyncpg scheme). HARNESS WIRING (part of done): requires a test Postgres, so it is a SEPARATE heavier gate (not the offline one); run via `cd api && uv run pytest` and document it plus its DB prerequisite in CLAUDE.md Verification Commands.",
+      "dependencies": ["feat-011"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-013",
+      "name": "FastAPI migration & schema parity testing",
+      "description": "pytest tests that Alembic `upgrade head` (and downgrade) apply cleanly on a fresh test DB, and that the three schema sources stay in agreement: SQLAlchemy models (api/db/models.py), the SQL migration (api/db/migrations/001_initial_schema.sql), and the Alembic version (api/alembic/versions/001_initial_schema.py). Cover computed columns (loads.gross_margin must never be settable directly) and confirm the workflow_items shape matches what the Next.js Drizzle layer (db/schema.ts) consumes. HARNESS WIRING (part of done): runs under the same `cd api && uv run pytest` command (scoped by a tests subdir/marker), needs a test DB, documented in CLAUDE.md Verification Commands.",
+      "dependencies": ["feat-012"],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

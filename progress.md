@@ -30,12 +30,16 @@ predate the harness. feat-007 captures fixing them as the first harness-driven t
 ### What's Next
 
 1. feat-007 — green the baseline lint gate.
-2. Testing roadmap added to `feature_list.json`: feat-008 (unit, Vitest), feat-009
-   (integration, Vitest over the route handlers / server actions), feat-010 (E2E,
-   Playwright). Each carries its harness-wiring requirement in its description — when
-   implemented, add the script to `package.json`, wire unit + integration into `init.sh`,
-   and document all tiers under 'Verification Commands' in `CLAUDE.md`. E2E stays out of
-   the offline gate (needs a running app + seeded DB).
+2. Testing roadmap added to `feature_list.json`:
+   - Next.js/TS: feat-008 (unit, Vitest), feat-009 (integration, Vitest over the route
+     handlers / server actions), feat-010 (E2E, Playwright).
+   - FastAPI service (`api/`): feat-011 (unit, pytest), feat-012 (integration via httpx
+     ASGITransport against a test Postgres), feat-013 (Alembic migration + schema parity).
+   Each carries its harness-wiring requirement in its description. JS tiers wire into
+   `package.json` + `init.sh` + `CLAUDE.md`; the Python tiers are a separate sub-project
+   (`cd api && uv run pytest`) documented in `CLAUDE.md` — not in the npm root gate. E2E
+   (JS) and the FastAPI integration/parity tiers stay out of the offline gate (need a
+   running app / test DB).
 3. Set the chosen feature's status to `in-progress`, implement it, run `./init.sh`,
    record evidence, and update this log before ending the session.
 

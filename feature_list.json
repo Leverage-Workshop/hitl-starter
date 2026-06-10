@@ -53,8 +53,8 @@
       "name": "Green the baseline lint gate",
       "description": "`./init.sh` currently fails on 3 pre-existing eslint errors: react-hooks/set-state-in-effect in app/dashboard/DashboardClient.tsx:219 and app/data/DataClient.tsx:144, and react/jsx-no-comment-textnodes in app/data/DataClient.tsx:187. `npx tsc --noEmit` is clean. Resolve these (the set-state-in-effect effects intentionally re-sync on prop change — verify behavior is preserved) so the baseline gate passes.",
       "dependencies": ["feat-002"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "Replaced useEffect+setState with computed-during-render prev-ref pattern in DashboardClient.tsx and DataClient.tsx; fixed JSX comment-text-nodes; `./init.sh` exits 0 (tsc + lint clean)"
     },
     {
       "id": "feat-008",

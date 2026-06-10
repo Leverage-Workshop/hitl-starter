@@ -214,14 +214,17 @@ export function DashboardClient({
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
 
-  // Sync items when workflow prop changes (navigation between workflows)
-  useEffect(() => {
+  // Sync state when workflow prop changes (navigation between workflows).
+  // Computed during render to avoid effect-triggered cascading re-renders.
+  const [prevWorkflow, setPrevWorkflow] = useState(initialWorkflow)
+  if (initialWorkflow !== prevWorkflow) {
+    setPrevWorkflow(initialWorkflow)
     setItems(initialWorkflow.items)
     setView(initialWorkflow.defaultView)
     setSelected(new Set())
     setOpenId(null)
     setQuery('')
-  }, [initialWorkflow])
+  }
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()

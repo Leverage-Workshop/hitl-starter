@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CLIENT } from '@/lib/data'
 import { renderCell, tdClass } from '@/lib/renderField'
@@ -97,7 +97,6 @@ function DataCards({
   config: EntityConfig
   rows: Record<string, unknown>[]
 }) {
-  const titleField = config.columns.find((f: FieldDef) => f.key === config.titleKey)
   const cardFields = config.columns.filter(
     (f: FieldDef) => f.showInCard && f.key !== config.titleKey,
   )
@@ -140,10 +139,16 @@ export function DataClient({ entityKey, rows }: DataClientProps) {
   const [view, setView] = useState<'table' | 'cards'>('table')
   const [query, setQuery] = useState('')
 
-  useEffect(() => {
+  // Reset view and query when entity or rows change.
+  // Computed during render to avoid effect-triggered cascading re-renders.
+  const [prevEntityKey, setPrevEntityKey] = useState(entityKey)
+  const [prevRows, setPrevRows] = useState(rows)
+  if (entityKey !== prevEntityKey || rows !== prevRows) {
+    setPrevEntityKey(entityKey)
+    setPrevRows(rows)
     setView('table')
     setQuery('')
-  }, [entityKey, rows])
+  }
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -184,7 +189,7 @@ export function DataClient({ entityKey, rows }: DataClientProps) {
           <div>
             <div className="toolbar">
               <div className="toolbar__left">
-                <span className="toolbar__title">{config.label.toUpperCase()} // ALL</span>
+                <span className="toolbar__title">{config.label.toUpperCase() + ' // ALL'}</span>
               </div>
               <div className="toolbar__right">
                 <div className="search">

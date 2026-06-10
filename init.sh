@@ -12,6 +12,9 @@ npx tsc --noEmit
 echo "=== npm run lint ==="
 npm run lint
 
+echo "=== npm test ==="
+npm test
+
 echo "=== Verification Complete ==="
 echo ""
 echo "Next steps:"

@@ -15,6 +15,9 @@ npm run lint
 echo "=== npm test ==="
 npm test
 
+echo "=== npm run test:integration ==="
+npm run test:integration
+
 echo "=== Verification Complete ==="
 echo ""
 echo "Next steps:"

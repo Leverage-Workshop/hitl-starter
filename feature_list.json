@@ -61,8 +61,8 @@
       "name": "Unit testing",
       "description": "Stand up Vitest for fast, offline unit tests of pure logic: contract Zod schemas and helpers (resolveItemActions, bulkActions, singleActions, intentToVariant in lib/contract/index.ts), formatters (lib/format.ts), and the renderField registry (lib/renderField.tsx). HARNESS WIRING (part of done): add a `test` script to package.json, add `npm test` to init.sh's offline gate, and document it under 'Verification Commands' in CLAUDE.md. Closes the audit's 'Test command documented' gap.",
       "dependencies": ["feat-001"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "vitest.config.ts + lib/contract/index.test.ts, lib/format.test.ts, lib/renderField.test.tsx (44 tests); `npm test` (TZ=UTC vitest run) added to package.json + init.sh offline gate + CLAUDE.md Verification Commands; ./init.sh exits 0"
     },
     {
       "id": "feat-009",

@@ -74,19 +74,23 @@ A feature is done only when ALL of these are true:
 ## Verification Commands
 
 ```bash
-./init.sh                # full gate: npm install + npx tsc --noEmit + npm run lint + npm test
+./init.sh                # full gate: npm install + npx tsc --noEmit + npm run lint + npm test + npm run test:integration
 ```
 
-- `npx tsc --noEmit`, `npm run lint`, and `npm test` are **offline** and form the fast gate.
+- `npx tsc --noEmit`, `npm run lint`, `npm test`, and `npm run test:integration` are
+  **offline** and form the fast gate.
 - `npm run build` and `npx tsx scripts/seed.ts` require `DATABASE_URL` + a live Neon DB
   and are **not** part of the fast gate — run them only when explicitly working on
   build/DB concerns.
 - **Unit tests** (feat-008) run via Vitest: `npm test` (= `TZ=UTC vitest run`,
   config in `vitest.config.ts`, files colocated as `lib/**/*.test.{ts,tsx}`). Offline,
   no DB — part of the `./init.sh` gate.
-- **Integration tests** (feat-009) join the offline gate when implemented (add their
-  script to `init.sh` and list it here); E2E (feat-010, `npm run test:e2e`, needs a
-  running app + seeded DB) is documented here as a separate heavier gate.
+- **Integration tests** (feat-009) run via `npm run test:integration` (= `TZ=UTC vitest run
+  --config vitest.integration.config.ts`, files in `tests/integration/`). They exercise the
+  inbound webhook route and decision-dispatch server actions against an **in-memory PGlite
+  Postgres** injected at the `@/db` seam — offline, no external DB — part of the `./init.sh`
+  gate. E2E (feat-010, `npm run test:e2e`, needs a running app + seeded DB) is documented
+  here as a separate heavier gate.
 - **FastAPI service tests** (`api/`, feat-011 unit, feat-012 integration, feat-013
   migration/schema parity) are a separate Python sub-project — run with
   `cd api && uv run pytest`. They are NOT part of the npm root gate; integration + parity

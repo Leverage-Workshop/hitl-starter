@@ -69,8 +69,8 @@
       "name": "Integration testing",
       "description": "Integration tests for module boundaries that touch I/O, reusing the Vitest runner from feat-008: inbound webhook route handler (HMAC auth + ItemSchema validation + idempotency on item.id, app/api/workflows/[id]/items/route.ts) and outbound decision dispatch server action (dispatching status + SSRF allowlist, app/actions/decisions.ts), against a mocked/in-memory DB via the db/index.ts getDb() seam. HARNESS WIRING (part of done): add a `test:integration` script, add it to the init.sh gate, and document it in CLAUDE.md Verification Commands.",
       "dependencies": ["feat-008", "feat-005", "feat-006"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "tests/integration/{helpers.ts,inbound-route.test.ts,decisions.test.ts} + vitest.integration.config.ts (25 tests) against in-memory PGlite via vi.mock('@/db'); `npm run test:integration` (TZ=UTC vitest run --config vitest.integration.config.ts) added to package.json + init.sh offline gate + CLAUDE.md Verification Commands; ./init.sh exits 0 (44 unit + 25 integration)"
     },
     {
       "id": "feat-010",

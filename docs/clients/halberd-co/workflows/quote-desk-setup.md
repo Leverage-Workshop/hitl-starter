@@ -25,7 +25,12 @@ The *what* of the workflow lives in [`quote-desk.md`](quote-desk.md). This file 
 - [ ] Gmail API enabled + OAuth for `quotes@halberd-co.com` (feat-015 — manual cloud setup)
 - [ ] Google Pub/Sub topic + push subscription → `/api/gmail/push` (feat-015 — manual cloud setup)
 - [ ] RateInsights endpoint deployed in FastAPI (feat-016)
-- [ ] Gmail send capability for the approved-quote reply (feat-017)
+- [x] Draft + queue + send-on-approval wired in-repo (feat-017): `trigger/quote-desk-draft.ts`
+      (price via RateInsights → draft via OpenRouter → write `workflow_item`), `trigger/quote-desk-send.ts`
+      (Gmail send threaded onto the RFQ), pure helpers `trigger/lib/quote.ts`, dispatch handler
+      `app/api/quote-desk/send/route.ts`. Remaining manual steps ↓.
+- [ ] Gmail `gmail.send` scope granted + point the approve/adjust action handler at
+      `/api/quote-desk/send` and set `QUOTE_SEND_WEBHOOK_SECRET` (feat-017 — manual setup)
 
 ---
 
@@ -100,10 +105,42 @@ dependency. The build cache dir `.trigger` is gitignored.
 **Env added by feat-015:** `GMAIL_ACCESS_TOKEN`, `PUBSUB_VERIFICATION_TOKEN`,
 `GMAIL_WATCH_ADDRESS` (default `quotes@halberd-co.com`), `GMAIL_START_HISTORY_ID` (poll fallback).
 
-## 5. Gmail send (feat-017)
+## 5. Quote draft + send-on-approval (feat-017)
 
-- Same OAuth scope must allow `gmail.send` (or a transactional sender) to deliver the
-  approved quote reply to the shipper, threaded onto the original RFQ where possible.
+**In-repo (done):** the loop from extracted RFQ to ready-to-send quote is wired and
+offline-checked:
+
+- `trigger/lib/quote.ts` — pure pricing/draft/mapping: `rfqToRateRequest` (RFQ →
+  RateInsights lookup), `decideQuote` (scores the band against `confidenceFloor` 0.75 →
+  auto-pass vs hold; thin/odd `loose`/`none` lanes suppress the number), `roundRate` /
+  `estimateTransitDays` / `isPickupSoon`, `buildDraftPrompt` (Halberd voice; omits the
+  price when suppressed), `toQuoteItem` (→ `workflow_items` create, idempotent on the
+  Gmail message id, RFQ + comparable-lane evidence in `source_content`/`context`, email
+  provenance stashed in non-display `fields` keys), and `quoteReplyFromItem` (rebuilds
+  the threaded reply from the approved item). Unit-tested (`trigger/lib/quote.test.ts`).
+- `trigger/quote-desk-draft.ts` — the `quote-desk-draft` task: `estimateRate` (persisted
+  as a `truckstop` snapshot) → `generateObject` draft over OpenRouter → write the item.
+  The intake task (feat-015) now `batchTrigger`s this per extracted RFQ.
+- `trigger/quote-desk-send.ts` — the `quote-desk-send` task: fetch the item → build the
+  reply (`quoteReplyFromItem`) → `GmailClient.sendMessage` (base64url RFC 5322 via
+  `buildRawMessage`, threaded by `threadId`) → settle the item.
+- `app/api/quote-desk/send/route.ts` — the **decision handler**: feat-006 POSTs the
+  HMAC-signed `{ itemId, actionId, … }` here; we verify `x-signature-sha256` against
+  `QUOTE_SEND_WEBHOOK_SECRET`, skip non-send actions, and trigger `quote-desk-send`.
+
+**Manual cloud setup (you do this):**
+
+1. **Grant `gmail.send`** on the same delegated mailbox used for intake (§4 step 1), and
+   supply a send-scoped token via `GMAIL_SEND_TOKEN` (falls back to `GMAIL_ACCESS_TOKEN`).
+   Set `QUOTE_FROM_ADDRESS` if the reply should come from something other than
+   `quotes@halberd-co.com`.
+2. **Wire the action handler:** in the seeded contract the `approve` / `adjust` actions
+   use semantic string handlers (like every workflow). To fire real sends, set those
+   actions' `handler` to `{ url: "https://<app-host>/api/quote-desk/send" }`, add
+   `<app-host>` to `ALLOWED_WEBHOOK_DOMAINS`, and set `QUOTE_SEND_WEBHOOK_SECRET` to the
+   quote-desk workflow's `webhookSecret` (the key feat-006 signs the dispatch with).
+3. **Marking the load `quoted`** is a loads-table concern: the send task settles the
+   `workflow_item`; the engine/FastAPI updates the underlying `loads` row once one exists.
 
 ---
 
@@ -119,4 +156,8 @@ dependency. The build cache dir `.trigger` is gitignored.
 | `PUBSUB_VERIFICATION_TOKEN` | `/api/gmail/push` | shared `?token=` verifying the push subscription |
 | `GMAIL_WATCH_ADDRESS` | poll fallback | watched mailbox (default `quotes@halberd-co.com`) |
 | `GMAIL_START_HISTORY_ID` | `quote-desk-poll` | history cursor for the scheduled fallback |
+| `GMAIL_SEND_TOKEN` | `quote-desk-send` | `gmail.send` token (falls back to `GMAIL_ACCESS_TOKEN`) |
+| `QUOTE_FROM_ADDRESS` | `quote-desk-send` | sender on the quote reply (default `quotes@halberd-co.com`) |
+| `QUOTE_SEND_WEBHOOK_SECRET` | `/api/quote-desk/send` | HMAC the feat-006 dispatch is verified against |
+| `ALLOWED_WEBHOOK_DOMAINS` | feat-006 dispatch | SSRF allowlist; must include the send handler host |
 | `GOOGLE_*` / Gmail OAuth creds, `PUBSUB_*` | Gmail intake/send | enablement + push sub |

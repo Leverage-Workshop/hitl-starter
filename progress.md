@@ -3,7 +3,45 @@
 ## Current State
 
 **Last Updated:** 2026-06-16
-**Active Feature:** feat-016 — DONE this session (FastAPI RateInsights endpoint)
+**Active Feature:** feat-017 — DONE this session (Quote Desk: draft + queue + send-on-approval)
+
+## feat-017 — Quote Desk: draft generation, queue write & send-on-approval (2026-06-16)
+
+Closed the quote-desk loop: extracted RFQ (feat-015) → RateInsights band (feat-016) → drafted
+quote in Halberd's voice → `workflow_item` for review → Gmail send on approval (feat-006 dispatch).
+
+- **Pure helpers** (`trigger/lib/quote.ts`, offline-testable, no I/O):
+  - `rfqToRateRequest` — RFQ → RateInsights lookup (upper-cases state codes).
+  - `decideQuote` — scores the band against `CONFIDENCE_FLOOR` 0.75. `lane_snapshots`/`lane_aggregate`
+    tiers carry a number; `loose_snapshots`/`none` are too thin/odd → `suppressRate` (no price, broker
+    prices it). `autoPassEligible` = has-rate AND ≥ floor. Also `roundRate` ($25), `estimateTransitDays`
+    (~500 mi/day), `isPickupSoon` (≤2d → high priority).
+  - `buildDraftPrompt` — Halberd-voice prompt; quotes the all-in target when present, else instructs the
+    model NOT to state a price and to promise a rep follow-up. `QuoteDraftSchema` = `{ subject, body }`.
+  - `toQuoteItem` — → `WorkflowItemCreate`, idempotent id `qd-<messageId>`, fields {lane, equipment,
+    pickup, rate, score (0–100)}, RFQ + comparable-lane evidence in `source_content`/`context`. Email
+    provenance (messageId/threadId/subject/shipperEmail) stashed in non-display `fields` keys (itemSchema
+    only renders 5 keys, so inert in UI) for the send task. `quoteReplyFromItem` rebuilds the threaded reply.
+- **Gmail send** (`trigger/lib/gmail.ts`): `buildRawMessage` (base64url RFC 5322, optional In-Reply-To/
+  References threading headers — pure, unit-tested) + `GmailClient.sendMessage` (`messages/send`, pins the
+  reply to `threadId`). **Data-API** (`trigger/lib/data-api.ts`): `estimateRate(body, persist?)` +
+  `RateInsightsRequest`/`RateInsightsEstimate` wire types.
+- **Tasks**: `trigger/quote-desk-draft.ts` (`quote-desk-draft`: estimateRate persisted → `generateObject`
+  draft over OpenRouter → createItem) and `trigger/quote-desk-send.ts` (`quote-desk-send`: getItem →
+  quoteReplyFromItem → Gmail send → updateItem approved). The intake task now `batchTrigger`s the draft
+  task per extracted RFQ, connecting feat-015 → feat-017.
+- **Decision handler** `app/api/quote-desk/send/route.ts`: feat-006 POSTs the HMAC-signed
+  `{itemId, actionId, …}`; verifies `x-signature-sha256` against `QUOTE_SEND_WEBHOOK_SECRET`, skips
+  non-send actions (decline/reassign), triggers `quote-desk-send`. The seed keeps semantic string handlers
+  (every workflow does) — point the approve/adjust handler `{url}` at this route + set
+  `ALLOWED_WEBHOOK_DOMAINS` to go live (documented in setup §5).
+- **Docs/env**: `.env.example` (`GMAIL_SEND_TOKEN`, `QUOTE_FROM_ADDRESS`, `QUOTE_SEND_WEBHOOK_SECRET`),
+  `quote-desk-setup.md` §5 + status checklist + env table, `CLAUDE.md` Verification Commands.
+- **Verification**: `./init.sh` exit 0 — tsc clean, lint clean, **97 unit** (+23: `quote.test.ts` 20 +
+  `buildRawMessage` 3) + 25 integration. Live LLM/Gmail/data-API path is NOT in the offline gate (needs
+  `OPENROUTER_API_KEY` + `DATA_API_BASE_URL` + a `gmail.send` token).
+
+---
 
 ## feat-016 — FastAPI RateInsights endpoint (mock Truckstop.com RateInsights) (2026-06-16)
 

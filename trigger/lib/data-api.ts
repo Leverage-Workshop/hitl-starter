@@ -39,6 +39,46 @@ export interface WorkflowItemUpdate {
   priority?: string;
 }
 
+/** POST /rate-insights/estimate body (mirrors RateInsightsRequest). */
+export interface RateInsightsRequest {
+  origin_city: string;
+  origin_state_code: string;
+  destination_city: string;
+  destination_state_code: string;
+  equipment_code: string;
+  origin_zip_code?: string | null;
+  destination_zip_code?: string | null;
+  /** Pickup date as YYYY-MM-DD, or null. */
+  pickup_date?: string | null;
+}
+
+/** Rate estimate response (mirrors RateInsightsEstimateOut). */
+export interface RateInsightsEstimate {
+  origin_city: string;
+  origin_state_code: string;
+  destination_city: string;
+  destination_state_code: string;
+  equipment_code: string;
+  pickup_date: string | null;
+  mileage: number | null;
+  low_rate_per_mile: number | null;
+  avg_rate_per_mile: number | null;
+  high_rate_per_mile: number | null;
+  fuel_surcharge_per_mile: number | null;
+  total_low: number | null;
+  total_avg: number | null;
+  total_high: number | null;
+  rate_source: string;
+  /** lane_snapshots | lane_aggregate | loose_snapshots | none */
+  match_tier: string;
+  comparable_count: number;
+  /** 0–1 confidence the band is reliable. */
+  confidence_score: number;
+  /** high | medium | low | none */
+  confidence_level: string;
+  as_of: string | null;
+}
+
 /** Workflow item response (mirrors WorkflowItemOut). */
 export interface WorkflowItemOut {
   id: string;
@@ -139,6 +179,16 @@ export class DataApiClient {
       "GET",
       `/workflow-items/${encodeURIComponent(itemId)}`,
     );
+  }
+
+  /**
+   * Rate band for an origin→destination lane from the mock Truckstop
+   * RateInsights endpoint (feat-016). Pass `persist` to record the lookup as a
+   * `truckstop` rate_snapshot (only persisted when a matching lane is found).
+   */
+  estimateRate(body: RateInsightsRequest, persist = false): Promise<RateInsightsEstimate> {
+    const query = persist ? "?persist=true" : "";
+    return this.request<RateInsightsEstimate>("POST", `/rate-insights/estimate${query}`, body);
   }
 
   /** List items for a workflow, optionally filtered by status. */

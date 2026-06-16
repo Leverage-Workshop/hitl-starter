@@ -153,11 +153,60 @@ export function parseGmailMessage(message: GmailMessage): ParsedEmail {
 }
 
 /* ------------------------------------------------------------------ */
+/* Outbound message (quote reply — feat-017)                           */
+/* ------------------------------------------------------------------ */
+
+/** A plain-text reply to send via Gmail `users.messages.send`. */
+export interface OutboundEmail {
+  to: string;
+  from: string;
+  subject: string;
+  body: string;
+  /**
+   * Original message's RFC 5322 `Message-ID` header value, threaded via
+   * `In-Reply-To`/`References` when present. Threading is also pinned by the
+   * Gmail `threadId` passed to {@link GmailClient.sendMessage}.
+   */
+  inReplyTo?: string | null;
+}
+
+/** Base64url-encode UTF-8 text (RFC 4648 §5), stripping `=` padding. */
+function encodeBase64Url(text: string): string {
+  return Buffer.from(text, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+/**
+ * Build a base64url-encoded RFC 5322 message for `users.messages.send`. Pure and
+ * unit-testable; the {@link GmailClient.sendMessage} call submits the result.
+ */
+export function buildRawMessage(email: OutboundEmail): string {
+  const headers = [
+    `To: ${email.to}`,
+    `From: ${email.from}`,
+    `Subject: ${email.subject}`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+  ];
+  if (email.inReplyTo) {
+    headers.push(`In-Reply-To: ${email.inReplyTo}`);
+    headers.push(`References: ${email.inReplyTo}`);
+  }
+  return encodeBase64Url(`${headers.join("\r\n")}\r\n\r\n${email.body}`);
+}
+
+/* ------------------------------------------------------------------ */
 /* REST client                                                         */
 /* ------------------------------------------------------------------ */
 
 export interface GmailClientOptions {
-  /** OAuth2 access token with `gmail.readonly` (or broader) scope. */
+  /**
+   * OAuth2 access token. Reading needs `gmail.readonly`; sending the approved
+   * quote reply (feat-017) needs `gmail.send` (see quote-desk-setup.md §5).
+   */
   accessToken: string;
   /** Mailbox to operate on. Defaults to `me` (the authorized user). */
   userId?: string;
@@ -192,6 +241,30 @@ export class GmailClient {
     });
     if (!res.ok) throw new GmailApiError(res.status, path, await res.text());
     return (await res.json()) as T;
+  }
+
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    const res = await this.fetchImpl(`${GMAIL_BASE}/users/${this.userId}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.options.accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new GmailApiError(res.status, path, await res.text());
+    return (await res.json()) as T;
+  }
+
+  /**
+   * Send a built {@link buildRawMessage} payload. Passing `threadId` keeps the
+   * reply on the original RFQ thread (feat-017). Needs `gmail.send` scope.
+   */
+  async sendMessage(params: { raw: string; threadId?: string | null }): Promise<{ id: string; threadId: string }> {
+    const body: { raw: string; threadId?: string } = { raw: params.raw };
+    if (params.threadId) body.threadId = params.threadId;
+    return this.post<{ id: string; threadId: string }>("/messages/send", body);
   }
 
   /** Fetch a full message resource and flatten it for the RFQ extractor. */

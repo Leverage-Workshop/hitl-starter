@@ -2,8 +2,27 @@
 
 ## Current State
 
-**Last Updated:** 2026-06-10
-**Active Feature:** None — feat-009 completed this session
+**Last Updated:** 2026-06-16
+**Active Feature:** None — roadmap planning this session (no implementation)
+
+## Roadmap update (2026-06-16)
+
+Added the quote-desk *engine* features to `feature_list.json` (the contract/UI side is
+already seeded in `lib/contract/seed.ts`; what's missing is the trigger.dev + FastAPI
+plumbing that feeds it). Split into four, per user direction:
+
+- **feat-014** — trigger.dev scaffolding + AI SDK/OpenRouter wiring (foundation).
+- **feat-015** — Gmail RFQ intake (users.watch → Pub/Sub → HTTP-trigger) + LLM structured
+  extraction via AI SDK `generateObject` + Zod over OpenRouter.
+- **feat-016** — FastAPI RateInsights endpoint mocking Truckstop.com from lanes +
+  rate_snapshots (independent of the trigger.dev work).
+- **feat-017** — draft generation, write workflow_item via the FastAPI hitl router, and
+  send the quote on approval (wires into feat-006 outbound dispatch + Gmail send).
+
+Created `docs/clients/halberd-co/workflows/quote-desk-setup.md` as the living infra/
+third-party setup doc; each feature appends what it needs as it's built. Decisions: real-time
+Gmail-push intake (not polling), LLM via OpenRouter AI SDK provider (default Claude,
+swappable), draft **and** send-on-approval in scope.
 
 ## Status
 

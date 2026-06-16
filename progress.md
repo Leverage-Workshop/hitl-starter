@@ -3,7 +3,41 @@
 ## Current State
 
 **Last Updated:** 2026-06-16
-**Active Feature:** feat-014 — DONE this session (trigger.dev scaffolding + AI SDK/OpenRouter wiring)
+**Active Feature:** feat-015 — DONE this session (Quote Desk: Gmail RFQ intake + LLM structured extraction)
+
+## feat-015 — Quote Desk: Gmail RFQ intake + LLM structured extraction (2026-06-16)
+
+Turned an inbound RFQ at quotes@halberd-co.com into a validated structured object.
+
+- **Extraction contract** (`trigger/lib/rfq.ts`, pure/offline-testable): Zod `RfqSchema`
+  (origin/destination, equipmentCode enum V/R/F/SD/DD + verbatim equipmentText, pickupDate,
+  weightLbs, commodity, accessorials, notes), `normalizeEquipment` (free text ↔ lane
+  `equipment_code`, order-sensitive so "reefer van"→R, "double drop"→DD), `parseWeight`
+  (`42k`/`42,000 lbs`→pounds), `formatLane`, `reconcileEquipment` (deterministic override of
+  the model's code from the free text), `buildExtractionPrompt`, and `toRfqPayload` →
+  `RfqPayload` consumed by feat-017.
+- **Gmail/Pub-Sub helpers** (`trigger/lib/gmail.ts`, pure parsers + thin client):
+  `parsePubSubPush` (decode the push envelope → `{emailAddress, historyId}`),
+  `parseGmailMessage`/`extractPlainText` (walk MIME tree, prefer text/plain, strip HTML
+  fallback)/`getHeader`, and `GmailClient` (`getMessage`, `addedMessageIds`) taking an
+  injected access token + fetch.
+- **Task** (`trigger/quote-desk-intake.ts`): `quote-desk-intake` — list added messages →
+  fetch → `generateObject` with `RfqSchema` over OpenRouter (Claude default from feat-014) →
+  emit validated `RfqPayload[]`. Plus `quote-desk-poll` hourly **scheduled fallback** replaying
+  from `GMAIL_START_HISTORY_ID` when push is down. Shared `processNotification` for both paths.
+- **Push URL** (`app/api/gmail/push/route.ts`): verifies `PUBSUB_VERIFICATION_TOKEN` (timing-safe
+  `?token=`), decodes the envelope, `tasks.trigger("quote-desk-intake", …)`, 204-acks.
+- **Tests**: `vitest.config.ts` include extended to `trigger/**/*.test.ts`; `rfq.test.ts` +
+  `gmail.test.ts` add 30 unit tests (74 total).
+- **Docs/env**: `.env.example` (GMAIL_ACCESS_TOKEN, PUBSUB_VERIFICATION_TOKEN,
+  GMAIL_WATCH_ADDRESS, GMAIL_START_HISTORY_ID), `quote-desk-setup.md` §4 (Gmail API enablement,
+  domain-wide-delegation OAuth, Pub/Sub topic+subscription+push-URL, `users.watch`), `CLAUDE.md`
+  Verification Commands.
+- **Verification**: `npx tsc --noEmit` clean; offline gate green (lint + 74 unit + 25
+  integration). Live Gmail+LLM path needs `GMAIL_ACCESS_TOKEN` + `OPENROUTER_API_KEY` — out of
+  the offline gate by design.
+
+---
 
 ## feat-014 — trigger.dev scaffolding & AI SDK/OpenRouter wiring (2026-06-16)
 

@@ -117,8 +117,8 @@
       "name": "Quote Desk: Gmail RFQ intake + LLM structured extraction",
       "description": "trigger.dev task that turns an inbound RFQ at quotes@halberd-co.com into a validated structured object. Real-time intake path: Gmail API users.watch → Google Pub/Sub topic → push subscription → trigger.dev HTTP-trigger task (document a scheduled poll fallback). The task fetches the message, then extracts structured RFQ JSON — origin, destination, equipment (map free text / 'dry van|reefer|flatbed' ↔ lane equipment_code V/R/F/SD/DD), pickup date, weight/commodity, accessorials — using the AI SDK generateObject with a Zod RfqSchema via OpenRouter (Claude default from feat-014). Emits a validated RFQ payload consumed by feat-017. Append the Gmail API enablement, OAuth/domain-wide-delegation, and Pub/Sub topic+subscription+push-URL steps to quote-desk-setup.md. Not in the offline gate; the Zod schema + equipment-mapping + parser helpers should be unit-testable offline (Vitest).",
       "dependencies": ["feat-014"],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "trigger/lib/rfq.ts (Zod RfqSchema + normalizeEquipment free-text↔V/R/F/SD/DD + parseWeight/formatLane/reconcileEquipment + buildExtractionPrompt) and trigger/lib/gmail.ts (parsePubSubPush envelope decode, parseGmailMessage/extractPlainText/getHeader, thin GmailClient). trigger/quote-desk-intake.ts: quote-desk-intake task (list added msgs → fetch → generateObject w/ RfqSchema over OpenRouter → emit RfqPayload[] for feat-017) + quote-desk-poll scheduled fallback. Push URL app/api/gmail/push (PUBSUB_VERIFICATION_TOKEN-verified → tasks.trigger). vitest.config.ts include extended to trigger/**/*.test.ts; rfq.test.ts + gmail.test.ts add 30 unit tests (74 total). .env.example + quote-desk-setup.md §4 (Gmail API/OAuth/Pub-Sub/watch steps) + CLAUDE.md updated. Offline gate green: npx tsc --noEmit clean, lint clean, 74 unit + 25 integration pass. Not in offline gate: live Gmail+LLM path (needs GMAIL_ACCESS_TOKEN + OPENROUTER_API_KEY)."
     },
     {
       "id": "feat-016",

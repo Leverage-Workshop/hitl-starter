@@ -83,8 +83,10 @@ A feature is done only when ALL of these are true:
   and are **not** part of the fast gate — run them only when explicitly working on
   build/DB concerns.
 - **Unit tests** (feat-008) run via Vitest: `npm test` (= `TZ=UTC vitest run`,
-  config in `vitest.config.ts`, files colocated as `lib/**/*.test.{ts,tsx}`). Offline,
-  no DB — part of the `./init.sh` gate.
+  config in `vitest.config.ts`, files colocated as `lib/**/*.test.{ts,tsx}` and
+  `trigger/**/*.test.ts` — the latter covers the offline-testable quote-desk intake
+  helpers (RFQ Zod schema + equipment mapping + Gmail/Pub-Sub parsers, feat-015)).
+  Offline, no DB — part of the `./init.sh` gate.
 - **Integration tests** (feat-009) run via `npm run test:integration` (= `TZ=UTC vitest run
   --config vitest.integration.config.ts`, files in `tests/integration/`). They exercise the
   inbound webhook route and decision-dispatch server actions against an **in-memory PGlite
@@ -101,6 +103,13 @@ A feature is done only when ALL of these are true:
   plus `OPENROUTER_API_KEY` + `DATA_API_BASE_URL`, so they are **NOT** part of the offline
   `./init.sh` gate. The scaffolding (`trigger.config.ts`, `trigger/lib/ai.ts`,
   `trigger/lib/data-api.ts`) is covered by the offline `npx tsc --noEmit` check.
+- **Quote-desk RFQ intake** (feat-015) adds the `quote-desk-intake` task (+ `quote-desk-poll`
+  scheduled fallback) in `trigger/quote-desk-intake.ts` and the Pub/Sub push endpoint
+  `app/api/gmail/push`. The LLM extraction (Gmail fetch + `generateObject`) needs
+  `GMAIL_ACCESS_TOKEN` + `OPENROUTER_API_KEY`, so the live path is **NOT** in the offline
+  gate; the pure helpers (`trigger/lib/rfq.ts`, `trigger/lib/gmail.ts`) are unit-tested by
+  `npm test` and the whole tree is tsc-checked. Gmail/Pub-Sub setup lives in
+  `docs/clients/halberd-co/workflows/quote-desk-setup.md` §4.
 
 ## State & Lifecycle Artifacts
 

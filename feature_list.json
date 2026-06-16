@@ -103,6 +103,38 @@
       "dependencies": ["feat-012"],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "feat-014",
+      "name": "trigger.dev scaffolding & AI SDK/OpenRouter wiring",
+      "description": "Stand up trigger.dev in the repo (the engine side of the already-seeded quote-desk contract): `npx trigger.dev@latest init` → trigger.config.ts + trigger/ dir, add @trigger.dev/sdk + ai (Vercel AI SDK) + @openrouter/ai-sdk-provider to package.json, and env scaffolding (TRIGGER_PROJECT_REF/SECRET_KEY/ACCESS_TOKEN, OPENROUTER_API_KEY, DATA_API_BASE_URL) in .env.example. Establish two shared helpers used by the quote-desk tasks: (1) an AI SDK model factory wrapping the OpenRouter provider (default anthropic/claude-sonnet-4-6, swappable by model id), and (2) a typed FastAPI data-API client so tasks write workflow_items via the hitl router (per api/db/models.py header), NOT the Next.js inbound webhook. HARNESS WIRING (part of done): document `npx trigger.dev@latest dev`/`deploy` under CLAUDE.md Verification Commands and note it is NOT part of the offline ./init.sh gate (needs trigger.dev creds); seed the docs/clients/halberd-co/workflows/quote-desk-setup.md infra doc. Verify with `npx tsc --noEmit` (offline) clean.",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-015",
+      "name": "Quote Desk: Gmail RFQ intake + LLM structured extraction",
+      "description": "trigger.dev task that turns an inbound RFQ at quotes@halberd-co.com into a validated structured object. Real-time intake path: Gmail API users.watch → Google Pub/Sub topic → push subscription → trigger.dev HTTP-trigger task (document a scheduled poll fallback). The task fetches the message, then extracts structured RFQ JSON — origin, destination, equipment (map free text / 'dry van|reefer|flatbed' ↔ lane equipment_code V/R/F/SD/DD), pickup date, weight/commodity, accessorials — using the AI SDK generateObject with a Zod RfqSchema via OpenRouter (Claude default from feat-014). Emits a validated RFQ payload consumed by feat-017. Append the Gmail API enablement, OAuth/domain-wide-delegation, and Pub/Sub topic+subscription+push-URL steps to quote-desk-setup.md. Not in the offline gate; the Zod schema + equipment-mapping + parser helpers should be unit-testable offline (Vitest).",
+      "dependencies": ["feat-014"],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-016",
+      "name": "FastAPI RateInsights endpoint (mock Truckstop.com RateInsights)",
+      "description": "Add a RateInsights rate-estimate endpoint to the FastAPI data API that approximates Truckstop.com's RateInsights API shape from the lanes + rate_snapshots tables. Given origin/destination (city/state, optionally zip), equipment_code, and optional pickup date, derive an estimate: low/avg/high rate-per-mile, mileage, total all-in band, fuel surcharge, and a confidence + comparable-count score. Matching logic: same lane + equipment within a recent window from rate_snapshots, falling back to lane aggregates (avg_*_rate_per_mile) and then nearby/looser matches; thin history → low confidence. Pydantic request/response models mirroring RateInsights' fields, new router wired in main.py, optionally persisting the lookup as a rate_snapshot (rate_source='truckstop'). HARNESS WIRING: the pure matching/aggregation helper is offline unit-testable and folds into the api/ pytest gate (feat-011/012); document the endpoint in docs/API.md. Independent of the trigger.dev work.",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-017",
+      "name": "Quote Desk: draft generation, queue write & send-on-approval",
+      "description": "Close the quote-desk loop per docs/clients/halberd-co/workflows/quote-desk.md. Consume the extracted RFQ (feat-015), call the FastAPI RateInsights endpoint (feat-016) for a rate band, and draft the quote reply in Halberd's voice (greeting, all-in target rate, transit estimate, validity window, booking ask) via the AI SDK over OpenRouter. Score confidence against confidenceFloor 0.75 — above it the draft is auto-pass eligible, below it the item holds pending for a broker (thin/odd lanes suppress the number). Write a quote-desk workflow_item via the FastAPI hitl router: summary, fields {lane, equipment, pickup, rate, score}, sourceContent = RFQ + comparable-lane evidence, proposedOutput = the draft, context refs for the comps. On 'Approve & send' (and 'Adjust rate & send') the existing outbound decision dispatch (feat-006) fires the quote email back to the shipper via the Gmail send API (threaded onto the RFQ) and marks the load quoted. Append Gmail send scope/sender setup to quote-desk-setup.md. Pure draft/confidence/item-mapping helpers unit-testable offline; the send path is an integration concern.",
+      "dependencies": ["feat-014", "feat-015", "feat-016", "feat-006"],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

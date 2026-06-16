@@ -20,6 +20,7 @@ from routers import (
     lanes,
     loads,
     quote_desk,
+    rate_insights,
     rate_snapshots,
     shipper_reactivation,
     shippers,
@@ -45,6 +46,7 @@ app.include_router(carriers.router)
 app.include_router(lanes.router)
 app.include_router(loads.router)
 app.include_router(rate_snapshots.router)
+app.include_router(rate_insights.router)
 
 # HITL queue
 app.include_router(hitl.router)

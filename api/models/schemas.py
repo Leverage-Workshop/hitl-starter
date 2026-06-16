@@ -431,3 +431,50 @@ class WorkflowItemOut(ORMModel):
     decided_by: str | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
+
+
+# ---------------------------------------------------------------------------
+# RateInsights — mock Truckstop.com rate-estimate endpoint
+# ---------------------------------------------------------------------------
+
+class RateInsightsRequest(BaseModel):
+    """Lookup parameters mirroring Truckstop RateInsights' query shape."""
+
+    origin_city: str
+    origin_state_code: str
+    destination_city: str
+    destination_state_code: str
+    equipment_code: str = "V"
+    origin_zip_code: str | None = None
+    destination_zip_code: str | None = None
+    pickup_date: dt.date | None = None
+
+
+class RateInsightsEstimateOut(BaseModel):
+    """Rate estimate approximating the Truckstop RateInsights response."""
+
+    # Echoed lookup
+    origin_city: str
+    origin_state_code: str
+    destination_city: str
+    destination_state_code: str
+    equipment_code: str
+    pickup_date: dt.date | None = None
+
+    # Estimate
+    mileage: int | None = None
+    low_rate_per_mile: Decimal | None = None
+    avg_rate_per_mile: Decimal | None = None
+    high_rate_per_mile: Decimal | None = None
+    fuel_surcharge_per_mile: Decimal | None = None
+    total_low: Decimal | None = None
+    total_avg: Decimal | None = None
+    total_high: Decimal | None = None
+
+    # Provenance + scoring
+    rate_source: str = "truckstop"
+    match_tier: str
+    comparable_count: int
+    confidence_score: float
+    confidence_level: str
+    as_of: dt.datetime | None = None

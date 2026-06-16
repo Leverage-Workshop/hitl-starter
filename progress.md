@@ -3,7 +3,40 @@
 ## Current State
 
 **Last Updated:** 2026-06-16
-**Active Feature:** None — roadmap planning this session (no implementation)
+**Active Feature:** feat-014 — DONE this session (trigger.dev scaffolding + AI SDK/OpenRouter wiring)
+
+## feat-014 — trigger.dev scaffolding & AI SDK/OpenRouter wiring (2026-06-16)
+
+Stood up the engine side of the already-seeded quote-desk contract.
+
+- **Config**: `trigger.config.ts` — `project` read from `TRIGGER_PROJECT_REF` (fallback
+  placeholder), `dirs: ["./trigger"]`, node runtime, default retries, `maxDuration: 300`.
+- **Deps** (npm install, root package.json): `@trigger.dev/sdk@^4`, `ai@^6` (Vercel AI SDK),
+  `@openrouter/ai-sdk-provider@^2`. All resolve the same hoisted `@ai-sdk/provider@3`, so the
+  OpenRouter `LanguageModelV3` is assignable to `ai`'s `LanguageModel` — tsc clean.
+- **Shared helpers** (`trigger/lib/`):
+  - `ai.ts` — `getModel(modelId?)` lazily builds + caches the OpenRouter provider from
+    `OPENROUTER_API_KEY`; default `anthropic/claude-sonnet-4-6`, swappable by id. `DEFAULT_MODEL`
+    exported.
+  - `data-api.ts` — `DataApiClient` / `getDataApi()` typed client for the FastAPI **hitl**
+    router (NOT the Next.js webhook): `createItem` (POST, idempotent on id), `updateItem`
+    (PATCH), `getItem`, `listItems`. snake_case wire shapes mirror `api/models/schemas.py`.
+    Lazy singleton so importing the module doesn't throw when env is unset. `DataApiError`
+    surfaces non-2xx with method/path/body.
+  - `example.ts` — `quote-desk-health` scaffold task exercising both helpers; feat-015/017
+    replace it.
+- **Env scaffolding** (`.env.example`): TRIGGER_PROJECT_REF / TRIGGER_SECRET_KEY /
+  TRIGGER_ACCESS_TOKEN, OPENROUTER_API_KEY, DATA_API_BASE_URL (+ optional DATA_API_TOKEN).
+  `.trigger` build cache added to `.gitignore`.
+- **Docs**: `quote-desk-setup.md` status checklist + sections 1–3 updated (what's scaffolded
+  vs. remaining manual cloud setup); `CLAUDE.md` Verification Commands note
+  `npx trigger.dev@latest dev`/`deploy` need creds and are NOT in the offline `./init.sh` gate.
+- **Verification**: `npx tsc --noEmit` clean; offline gate green (lint + 44 unit + 25
+  integration). trigger dev/deploy not runnable here (no creds) — out of the offline gate by design.
+
+---
+
+### Prior session (roadmap planning)
 
 ## Roadmap update (2026-06-16)
 

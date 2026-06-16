@@ -109,8 +109,8 @@
       "name": "trigger.dev scaffolding & AI SDK/OpenRouter wiring",
       "description": "Stand up trigger.dev in the repo (the engine side of the already-seeded quote-desk contract): `npx trigger.dev@latest init` → trigger.config.ts + trigger/ dir, add @trigger.dev/sdk + ai (Vercel AI SDK) + @openrouter/ai-sdk-provider to package.json, and env scaffolding (TRIGGER_PROJECT_REF/SECRET_KEY/ACCESS_TOKEN, OPENROUTER_API_KEY, DATA_API_BASE_URL) in .env.example. Establish two shared helpers used by the quote-desk tasks: (1) an AI SDK model factory wrapping the OpenRouter provider (default anthropic/claude-sonnet-4-6, swappable by model id), and (2) a typed FastAPI data-API client so tasks write workflow_items via the hitl router (per api/db/models.py header), NOT the Next.js inbound webhook. HARNESS WIRING (part of done): document `npx trigger.dev@latest dev`/`deploy` under CLAUDE.md Verification Commands and note it is NOT part of the offline ./init.sh gate (needs trigger.dev creds); seed the docs/clients/halberd-co/workflows/quote-desk-setup.md infra doc. Verify with `npx tsc --noEmit` (offline) clean.",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "trigger.config.ts (project ref from TRIGGER_PROJECT_REF, dirs ./trigger) + trigger/ dir (lib/ai.ts model factory wrapping @openrouter/ai-sdk-provider, default anthropic/claude-sonnet-4-6 swappable; lib/data-api.ts typed FastAPI hitl-router client mirroring api/models/schemas.py; example.ts quote-desk-health scaffold task). Deps @trigger.dev/sdk@^4 + ai@^6 + @openrouter/ai-sdk-provider@^2 added. .env.example: TRIGGER_PROJECT_REF/SECRET_KEY/ACCESS_TOKEN, OPENROUTER_API_KEY, DATA_API_BASE_URL(+TOKEN); .trigger gitignored. Docs: quote-desk-setup.md updated + CLAUDE.md Verification Commands note trigger dev/deploy NOT in offline gate. Offline gate green: npx tsc --noEmit clean, lint + 44 unit + 25 integration pass."
     },
     {
       "id": "feat-015",

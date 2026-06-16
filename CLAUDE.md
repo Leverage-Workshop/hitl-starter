@@ -95,6 +95,12 @@ A feature is done only when ALL of these are true:
   migration/schema parity) are a separate Python sub-project — run with
   `cd api && uv run pytest`. They are NOT part of the npm root gate; integration + parity
   additionally need a test Postgres. Document them here as their own gate when added.
+- **trigger.dev engine** (feat-014, quote-desk) runs the tasks in `trigger/` via
+  `npx trigger.dev@latest dev` (local) and `npx trigger.dev@latest deploy`. These need
+  trigger.dev creds (`TRIGGER_PROJECT_REF` / `TRIGGER_ACCESS_TOKEN` / `TRIGGER_SECRET_KEY`)
+  plus `OPENROUTER_API_KEY` + `DATA_API_BASE_URL`, so they are **NOT** part of the offline
+  `./init.sh` gate. The scaffolding (`trigger.config.ts`, `trigger/lib/ai.ts`,
+  `trigger/lib/data-api.ts`) is covered by the offline `npx tsc --noEmit` check.
 
 ## State & Lifecycle Artifacts
 

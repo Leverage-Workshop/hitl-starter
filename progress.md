@@ -3,7 +3,39 @@
 ## Current State
 
 **Last Updated:** 2026-06-16
-**Active Feature:** feat-015 — DONE this session (Quote Desk: Gmail RFQ intake + LLM structured extraction)
+**Active Feature:** feat-016 — DONE this session (FastAPI RateInsights endpoint)
+
+## feat-016 — FastAPI RateInsights endpoint (mock Truckstop.com RateInsights) (2026-06-16)
+
+Added a Truckstop-style rate-estimate endpoint to the FastAPI data API, deriving a rate band
+for a lane from the local `lanes` + `rate_snapshots` tables. Feeds feat-017 (quote pricing).
+
+- **Pure helper** (`api/services/rate_insights.py`, no DB/FastAPI imports, offline-testable):
+  `estimate_rate(...)` tiers candidate comps deterministically —
+  `lane_snapshots` (exact origin/dest *city* pair + equipment, within a 90-day window) →
+  `lane_aggregate` (the matched lane row's `avg_carrier_rate_per_mile` ± 8%/12% spread) →
+  `loose_snapshots` (same *state* pair + equipment, city ignored) → `none`. Emits low/avg/high
+  rate-per-mile, fuel surcharge, all-in dollar band (`(rpm + fuel) × miles`), and a
+  `confidence_score`/`confidence_level` scaled by comparable count (high ≥ 0.75, aligned to the
+  quote-desk `confidenceFloor`). Dataclass inputs (`Comparable`, `LaneAggregate`) so the router
+  owns all I/O.
+- **Schemas** (`api/models/schemas.py`): `RateInsightsRequest` (origin/dest city+state, optional
+  zip, equipment_code default V, optional pickup_date) and `RateInsightsEstimateOut` (echoed
+  lookup + band + totals + `rate_source='truckstop'` + match_tier/comparable_count/confidence/as_of).
+- **Router** (`api/routers/rate_insights.py`): `POST /rate-insights/estimate`. Fetches the exact
+  matching lane (city/state + equipment) and recent same-state-pair snapshots, maps to the helper
+  dataclasses, returns the estimate. `?persist=true` (with a matched lane) writes the lookup back
+  as a `rate_source='truckstop'` snapshot for the audit trail. Wired in `api/main.py`.
+- **Tests** (`api/tests/test_rate_insights.py`, 10 unit tests): tier selection, band averaging,
+  lane-mileage override, confidence depth scaling, equipment-mismatch + stale-window exclusion,
+  `as_of`. Run: `cd api && PYTHONPATH=. uv run --with pytest pytest tests/test_rate_insights.py`
+  → 10 passed. Folds into the feat-011/012 pytest gate (pyproject wiring is that feature's scope).
+- **Docs**: endpoint + matching strategy documented in `docs/API.md`.
+- **Verification**: `python -m py_compile` clean; `main.app` imports with the route present; npm
+  offline gate (`./init.sh`) still green (tsc + lint + 44 unit + 25 integration). The api/ pytest
+  gate is not yet in CLAUDE.md (feat-011 owns that wiring); the new test runs via the uv one-liner.
+
+---
 
 ## feat-015 — Quote Desk: Gmail RFQ intake + LLM structured extraction (2026-06-16)
 

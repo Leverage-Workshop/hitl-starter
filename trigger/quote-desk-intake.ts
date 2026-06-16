@@ -16,11 +16,24 @@
  * OpenRouter (Claude default from feat-014) → emits validated RFQ payloads.
  */
 import { generateObject } from "ai";
-import { logger, schedules, task } from "@trigger.dev/sdk";
+import { logger, schedules, task, tasks } from "@trigger.dev/sdk";
 
 import { getModel } from "./lib/ai";
 import { GmailClient, type GmailNotification, type ParsedEmail } from "./lib/gmail";
 import { RfqSchema, buildExtractionPrompt, toRfqPayload, type RfqPayload } from "./lib/rfq";
+import type { quoteDeskDraft } from "./quote-desk-draft";
+
+/**
+ * Hand each extracted RFQ to the draft step (feat-017): price → draft → queue a
+ * `workflow_item`. Fan out as a batch so one bad RFQ doesn't block the rest.
+ */
+async function dispatchToDraft(rfqs: RfqPayload[]): Promise<void> {
+  if (rfqs.length === 0) return;
+  await tasks.batchTrigger<typeof quoteDeskDraft>(
+    "quote-desk-draft",
+    rfqs.map((payload) => ({ payload })),
+  );
+}
 
 /**
  * Resolve a Gmail OAuth access token. The scaffold reads `GMAIL_ACCESS_TOKEN`;
@@ -74,6 +87,7 @@ export const quoteDeskIntake = task({
   run: async (payload: GmailNotification & { accessToken?: string }) => {
     const client = new GmailClient({ accessToken: resolveGmailToken(payload.accessToken) });
     const rfqs = await processNotification(payload, client);
+    await dispatchToDraft(rfqs);
     logger.info("quote-desk RFQ intake", {
       emailAddress: payload.emailAddress,
       historyId: payload.historyId,
@@ -101,6 +115,7 @@ export const quoteDeskPoll = schedules.task({
     }
     const client = new GmailClient({ accessToken: resolveGmailToken() });
     const rfqs = await processNotification({ emailAddress, historyId: startHistoryId }, client);
+    await dispatchToDraft(rfqs);
     logger.info("quote-desk poll fallback", { emailAddress, startHistoryId, extracted: rfqs.length });
     return { ok: true, extracted: rfqs.length, rfqs };
   },

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import {
+  buildRawMessage,
   decodeBase64Url,
   extractPlainText,
   getHeader,
@@ -86,6 +87,47 @@ describe('extractPlainText', () => {
       ],
     }
     expect(extractPlainText(payload)).toBe('nested plain')
+  })
+})
+
+describe('buildRawMessage', () => {
+  it('encodes a base64url RFC 5322 message with the core headers', () => {
+    const raw = buildRawMessage({
+      to: 'logistics@valleypack.com',
+      from: 'quotes@halberd-co.com',
+      subject: 'Re: Need a reefer Thu',
+      body: 'all-in $2,850 — reply "book it".',
+    })
+    // base64url alphabet only (no +, /, or = padding).
+    expect(raw).toMatch(/^[A-Za-z0-9_-]+$/)
+    const decoded = decodeBase64Url(raw)
+    expect(decoded).toContain('To: logistics@valleypack.com')
+    expect(decoded).toContain('From: quotes@halberd-co.com')
+    expect(decoded).toContain('Subject: Re: Need a reefer Thu')
+    expect(decoded).toContain('Content-Type: text/plain; charset="UTF-8"')
+    // Blank line separates headers from the body.
+    expect(decoded).toContain('\r\n\r\nall-in $2,850')
+  })
+
+  it('adds threading headers when inReplyTo is present', () => {
+    const decoded = decodeBase64Url(
+      buildRawMessage({
+        to: 'a@b.com',
+        from: 'quotes@halberd-co.com',
+        subject: 'Re: x',
+        body: 'hi',
+        inReplyTo: '<orig-message-id@mail.gmail.com>',
+      }),
+    )
+    expect(decoded).toContain('In-Reply-To: <orig-message-id@mail.gmail.com>')
+    expect(decoded).toContain('References: <orig-message-id@mail.gmail.com>')
+  })
+
+  it('omits threading headers when inReplyTo is absent', () => {
+    const decoded = decodeBase64Url(
+      buildRawMessage({ to: 'a@b.com', from: 'q@h.com', subject: 's', body: 'b' }),
+    )
+    expect(decoded).not.toContain('In-Reply-To:')
   })
 })
 

@@ -110,6 +110,15 @@ A feature is done only when ALL of these are true:
   gate; the pure helpers (`trigger/lib/rfq.ts`, `trigger/lib/gmail.ts`) are unit-tested by
   `npm test` and the whole tree is tsc-checked. Gmail/Pub-Sub setup lives in
   `docs/clients/halberd-co/workflows/quote-desk-setup.md` §4.
+- **Quote-desk draft + send** (feat-017) closes the loop: `trigger/quote-desk-draft.ts`
+  (`quote-desk-draft` — price via the RateInsights endpoint + draft via OpenRouter + write
+  the `workflow_item`; the intake task `batchTrigger`s it) and `trigger/quote-desk-send.ts`
+  (`quote-desk-send` — Gmail send on approval, threaded onto the RFQ), driven from the
+  decision handler `app/api/quote-desk/send`. The live path needs `OPENROUTER_API_KEY` +
+  `DATA_API_BASE_URL` + a `gmail.send` token, so it is **NOT** in the offline gate; the pure
+  pricing/draft/mapping helpers (`trigger/lib/quote.ts`) and the `buildRawMessage` MIME
+  builder are unit-tested by `npm test` and the whole tree is tsc-checked. Send setup lives
+  in `docs/clients/halberd-co/workflows/quote-desk-setup.md` §5.
 
 ## State & Lifecycle Artifacts
 

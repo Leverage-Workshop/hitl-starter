@@ -10,9 +10,14 @@ The *what* of the workflow lives in [`quote-desk.md`](quote-desk.md). This file 
 
 ## Status checklist
 
-- [ ] trigger.dev project created + CLI authed (feat-014)
-- [ ] OpenRouter API key provisioned (feat-014)
-- [ ] FastAPI data-API client reachable from tasks (feat-014)
+- [x] trigger.dev scaffolded in-repo: `trigger.config.ts` + `trigger/` dir, SDK + AI
+      SDK + OpenRouter deps, env vars in `.env.example` (feat-014). Remaining manual
+      step: create the cloud project and set `TRIGGER_PROJECT_REF` / auth the CLI.
+- [x] OpenRouter wiring: AI SDK model factory `trigger/lib/ai.ts` (feat-014).
+      Remaining manual step: provision `OPENROUTER_API_KEY`.
+- [x] Typed FastAPI data-API client `trigger/lib/data-api.ts` writes `workflow_items`
+      via the hitl router (feat-014). Remaining manual step: deploy the API and set
+      `DATA_API_BASE_URL`.
 - [ ] Gmail API enabled + OAuth for `quotes@halberd-co.com` (feat-015)
 - [ ] Google Pub/Sub topic + push subscription → trigger.dev endpoint (feat-015)
 - [ ] RateInsights endpoint deployed in FastAPI (feat-016)
@@ -22,23 +27,35 @@ The *what* of the workflow lives in [`quote-desk.md`](quote-desk.md). This file 
 
 ## 1. trigger.dev (feat-014)
 
-- Create a trigger.dev project (cloud or self-hosted); note the **project ref**.
-- `npx trigger.dev@latest login` / `init`; commit `trigger.config.ts` and the `trigger/` dir.
+**In-repo scaffolding (done):** `trigger.config.ts` (project ref read from
+`TRIGGER_PROJECT_REF`, `dirs: ["./trigger"]`) and the `trigger/` dir — shared helpers in
+`trigger/lib/` plus a `quote-desk-health` scaffold task. `@trigger.dev/sdk` is a project
+dependency. The build cache dir `.trigger` is gitignored.
+
+**Manual cloud setup (you do this):**
+
+- Create a trigger.dev project (cloud or self-hosted); note the **project ref** → set
+  `TRIGGER_PROJECT_REF` (or replace the fallback in `trigger.config.ts`).
+- `npx trigger.dev@latest login` to auth the CLI.
 - Env: `TRIGGER_PROJECT_REF`, `TRIGGER_SECRET_KEY` (deploy), `TRIGGER_ACCESS_TOKEN` (CLI/MCP).
-- Deploy with `npx trigger.dev@latest deploy`; local dev with `npx trigger.dev@latest dev`.
+- Local dev: `npx trigger.dev@latest dev`. Deploy: `npx trigger.dev@latest deploy`.
 
 ## 2. LLM via OpenRouter (feat-014/015/017)
 
 - Provision an **OpenRouter** API key → `OPENROUTER_API_KEY`.
-- AI SDK provider: `@openrouter/ai-sdk-provider`. Default model `anthropic/claude-sonnet-4-6`
-  (swap by model id). Structured extraction uses `generateObject` + a Zod schema; drafting
-  uses `generateText`/`generateObject`.
+- AI SDK provider `@openrouter/ai-sdk-provider` is wrapped by the model factory
+  `trigger/lib/ai.ts`: `getModel(modelId?)` returns an AI SDK `LanguageModel`, default
+  `anthropic/claude-sonnet-4-6` (swap by model id). Structured extraction uses
+  `generateObject` + a Zod schema (feat-015); drafting uses `generateText`/`generateObject`
+  (feat-017).
 
 ## 3. FastAPI data API (feat-014/016/017)
 
 - Tasks write `workflow_items` via the FastAPI `hitl` router (not the Next.js webhook) —
-  see `api/db/models.py` header. Needs the deployed base URL → `DATA_API_BASE_URL`
-  (+ any auth header the API requires).
+  see `api/db/models.py` header. The typed client `trigger/lib/data-api.ts`
+  (`getDataApi()` → `createItem` / `updateItem` / `getItem` / `listItems`) mirrors the
+  Pydantic shapes in `api/models/schemas.py`.
+- Needs the deployed base URL → `DATA_API_BASE_URL` (+ optional `DATA_API_TOKEN` bearer).
 - `DATABASE_URL` (asyncpg) for the FastAPI service itself.
 
 ## 4. Gmail intake (feat-015)
@@ -61,7 +78,7 @@ The *what* of the workflow lives in [`quote-desk.md`](quote-desk.md). This file 
 | Var | Used by | Notes |
 |---|---|---|
 | `TRIGGER_PROJECT_REF` / `TRIGGER_SECRET_KEY` / `TRIGGER_ACCESS_TOKEN` | trigger.dev | project + deploy + CLI |
-| `OPENROUTER_API_KEY` | extract/draft tasks | LLM via AI SDK |
-| `DATA_API_BASE_URL` | tasks → FastAPI | write workflow_items |
+| `OPENROUTER_API_KEY` | extract/draft tasks | LLM via AI SDK (`trigger/lib/ai.ts`) |
+| `DATA_API_BASE_URL` / `DATA_API_TOKEN` | tasks → FastAPI | write workflow_items (`trigger/lib/data-api.ts`); token optional |
 | `DATABASE_URL` | FastAPI | asyncpg connection |
 | `GOOGLE_*` / Gmail OAuth creds, `PUBSUB_*` | Gmail intake/send | enablement + push sub |

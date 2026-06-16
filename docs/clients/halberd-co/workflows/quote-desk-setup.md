@@ -18,8 +18,12 @@ The *what* of the workflow lives in [`quote-desk.md`](quote-desk.md). This file 
 - [x] Typed FastAPI data-API client `trigger/lib/data-api.ts` writes `workflow_items`
       via the hitl router (feat-014). Remaining manual step: deploy the API and set
       `DATA_API_BASE_URL`.
-- [ ] Gmail API enabled + OAuth for `quotes@halberd-co.com` (feat-015)
-- [ ] Google Pub/Sub topic + push subscription → trigger.dev endpoint (feat-015)
+- [x] RFQ intake task + extraction contract in-repo (feat-015): `trigger/quote-desk-intake.ts`
+      (push-triggered `quote-desk-intake` + scheduled `quote-desk-poll` fallback), Gmail/Pub-Sub
+      parse helpers `trigger/lib/gmail.ts`, Zod `RfqSchema` + equipment mapping + parsers
+      `trigger/lib/rfq.ts`, push endpoint `app/api/gmail/push`. Remaining manual steps ↓.
+- [ ] Gmail API enabled + OAuth for `quotes@halberd-co.com` (feat-015 — manual cloud setup)
+- [ ] Google Pub/Sub topic + push subscription → `/api/gmail/push` (feat-015 — manual cloud setup)
 - [ ] RateInsights endpoint deployed in FastAPI (feat-016)
 - [ ] Gmail send capability for the approved-quote reply (feat-017)
 
@@ -60,11 +64,41 @@ dependency. The build cache dir `.trigger` is gitignored.
 
 ## 4. Gmail intake (feat-015)
 
-- Enable the **Gmail API** in a Google Cloud project; OAuth client/service-account with
-  domain-wide delegation for `quotes@halberd-co.com`.
-- Real-time path: `users.watch` → **Pub/Sub** topic → push subscription POSTing to a
-  trigger.dev HTTP-trigger endpoint. Record topic name, subscription, and the push URL.
-- Token storage/refresh strategy for the mailbox.
+**In-repo (done):** the intake engine is wired and offline-checked:
+
+- `trigger/lib/rfq.ts` — `RfqSchema` (Zod) + `normalizeEquipment` (free text ↔ lane
+  `equipment_code` V/R/F/SD/DD) + `parseWeight`/`formatLane`/`reconcileEquipment` parser
+  helpers + `buildExtractionPrompt`. Pure, unit-tested (`trigger/lib/rfq.test.ts`).
+- `trigger/lib/gmail.ts` — `parsePubSubPush` (decode the Pub/Sub envelope → Gmail
+  notification), `parseGmailMessage`/`extractPlainText`/`getHeader` (flatten a Gmail message),
+  and a thin `GmailClient` (`getMessage`, `addedMessageIds`) that takes an access token. Pure
+  parsers are unit-tested (`trigger/lib/gmail.test.ts`).
+- `trigger/quote-desk-intake.ts` — the `quote-desk-intake` task: list added messages →
+  fetch → `generateObject` with `RfqSchema` over OpenRouter (Claude default) → emit validated
+  `RfqPayload[]` (consumed by feat-017). Plus the `quote-desk-poll` **scheduled fallback**
+  (hourly cron, replays from `GMAIL_START_HISTORY_ID` when push is down).
+- `app/api/gmail/push/route.ts` — the **push URL**: verifies `PUBSUB_VERIFICATION_TOKEN`,
+  decodes the envelope, and `tasks.trigger("quote-desk-intake", …)`.
+
+**Manual cloud setup (you do this):**
+
+1. **Enable the Gmail API** in a Google Cloud project. Create a service account with
+   **domain-wide delegation**, granting scope `https://www.googleapis.com/auth/gmail.readonly`
+   (add `gmail.send` now if doing feat-017) for `quotes@halberd-co.com`.
+2. **Pub/Sub topic** — e.g. `projects/<proj>/topics/gmail-rfq`. Grant
+   `gmail-api-push@system.gserviceaccount.com` the **Pub/Sub Publisher** role on it.
+3. **Push subscription** on that topic with push endpoint
+   `https://<app-host>/api/gmail/push?token=$PUBSUB_VERIFICATION_TOKEN`. Record topic,
+   subscription, and push URL here.
+4. **Start the watch:** call Gmail `users.watch` for the mailbox with
+   `{ topicName, labelIds: ["INBOX"] }`. It returns a `historyId`; watches **expire in 7 days**,
+   so re-issue `users.watch` on a schedule. Seed `GMAIL_START_HISTORY_ID` for the poll fallback.
+5. **Token storage/refresh:** mint a delegated access token for the mailbox and supply it via
+   `GMAIL_ACCESS_TOKEN` (the scaffold's `resolveGmailToken`); production should refresh it
+   rather than pin a static token.
+
+**Env added by feat-015:** `GMAIL_ACCESS_TOKEN`, `PUBSUB_VERIFICATION_TOKEN`,
+`GMAIL_WATCH_ADDRESS` (default `quotes@halberd-co.com`), `GMAIL_START_HISTORY_ID` (poll fallback).
 
 ## 5. Gmail send (feat-017)
 
@@ -81,4 +115,8 @@ dependency. The build cache dir `.trigger` is gitignored.
 | `OPENROUTER_API_KEY` | extract/draft tasks | LLM via AI SDK (`trigger/lib/ai.ts`) |
 | `DATA_API_BASE_URL` / `DATA_API_TOKEN` | tasks → FastAPI | write workflow_items (`trigger/lib/data-api.ts`); token optional |
 | `DATABASE_URL` | FastAPI | asyncpg connection |
+| `GMAIL_ACCESS_TOKEN` | intake task / Gmail client | delegated read token for `quotes@halberd-co.com` |
+| `PUBSUB_VERIFICATION_TOKEN` | `/api/gmail/push` | shared `?token=` verifying the push subscription |
+| `GMAIL_WATCH_ADDRESS` | poll fallback | watched mailbox (default `quotes@halberd-co.com`) |
+| `GMAIL_START_HISTORY_ID` | `quote-desk-poll` | history cursor for the scheduled fallback |
 | `GOOGLE_*` / Gmail OAuth creds, `PUBSUB_*` | Gmail intake/send | enablement + push sub |

@@ -7,6 +7,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['lib/**/*.test.{ts,tsx}'],
+    include: ['lib/**/*.test.{ts,tsx}', 'trigger/**/*.test.ts'],
   },
 })
